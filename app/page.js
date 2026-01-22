@@ -3,23 +3,22 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Loader2, ArrowRight, Eye, Trash2, Plus, Save, X, Edit, 
-  Lock, LogOut, User, StickyNote 
+  Lock, LogOut, User, StickyNote, Share2 
 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function Home() {
   // --- CONFIGURAZIONE ---
-  const SECRET_PASSWORD = "trainer2024"; // La password è uguale per tutti i coach (per ora)
+  const SECRET_PASSWORD = "trainer2024"; 
 
   // --- STATI AUTH ---
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [coachUser, setCoachUser] = useState(""); // Es. 'francesco'
+  const [coachUser, setCoachUser] = useState(""); 
   
-  // Input del Form Login
+  // Input Form Login
   const [inputUser, setInputUser] = useState("");
   const [inputPass, setInputPass] = useState("");
-  const [authError, setAuthError] = useState(false);
-  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [loginStatus, setLoginStatus] = useState("idle"); // idle, loading, error, unauthorized
 
   // --- STATI APP ---
   const [view, setView] = useState('dashboard'); 
@@ -49,13 +48,10 @@ export default function Home() {
     if (storedAuth === "true" && storedUser) {
       setIsAuthenticated(true);
       setCoachUser(storedUser);
-      // Fetch viene chiamato in un useEffect separato quando cambia coachUser
-    } else {
-      setCheckingAuth(false);
-    }
+    } 
   }, []);
 
-  // --- 2. FETCH DATI (SCATTA SOLO SE C'È UN UTENTE) ---
+  // --- 2. FETCH DATI ---
   useEffect(() => {
     if (isAuthenticated && coachUser) {
       fetchWorkouts();
@@ -64,7 +60,6 @@ export default function Home() {
 
   const fetchWorkouts = async () => {
     setLoadingWorkouts(true);
-    // FILTRO MAGICO: Prendi solo le schede dove coach_id è uguale all'utente loggato
     const { data, error } = await supabase
       .from('workout_templates')
       .select('*')
@@ -75,18 +70,37 @@ export default function Home() {
     setLoadingWorkouts(false);
   };
 
-  const handleLogin = (e) => {
+  // --- NUOVA LOGICA LOGIN CON ANAGRAFICA ---
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // Controllo semplice: Password corretta + User non vuoto
-    if (inputPass === SECRET_PASSWORD && inputUser.trim() !== "") {
-      const userClean = inputUser.trim().toLowerCase(); // Normalizziamo (es. Francesco -> francesco)
-      setIsAuthenticated(true);
-      setCoachUser(userClean);
-      localStorage.setItem("trainer_auth", "true");
-      localStorage.setItem("trainer_user", userClean);
-    } else {
-      setAuthError(true);
+    setLoginStatus("loading");
+
+    // 1. Controllo Password Master
+    if (inputPass !== SECRET_PASSWORD) {
+      setLoginStatus("error");
+      return;
     }
+
+    const userClean = inputUser.trim().toLowerCase();
+
+    // 2. Controllo Anagrafica su Supabase
+    const { data, error } = await supabase
+      .from('allowed_coaches')
+      .select('username')
+      .eq('username', userClean)
+      .single();
+
+    if (error || !data) {
+      setLoginStatus("unauthorized"); // Utente non in lista
+      return;
+    }
+
+    // 3. Successo
+    setIsAuthenticated(true);
+    setCoachUser(userClean);
+    localStorage.setItem("trainer_auth", "true");
+    localStorage.setItem("trainer_user", userClean);
+    setLoginStatus("idle");
   };
 
   const handleLogout = () => {
@@ -97,9 +111,18 @@ export default function Home() {
     setInputPass("");
     setInputUser("");
     setSavedWorkouts([]);
+    setLoginStatus("idle");
   };
 
-  // --- LOGICA SALVATAGGIO (Con etichetta Coach) ---
+  // --- CONDIVISIONE WHATSAPP ---
+  const shareOnWhatsApp = (id, title) => {
+    const url = `${window.location.origin}/scheda/${id}`;
+    const text = `Ciao! Ecco la tua scheda di allenamento "${title}": ${url}`;
+    const whatsappLink = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(whatsappLink, '_blank');
+  };
+
+  // --- LOGICA SALVATAGGIO ---
   const handleSave = async () => {
     if (manualExercises.length === 0) { alert("Aggiungi almeno un esercizio!"); return; }
     setUploading(true);
@@ -115,7 +138,7 @@ export default function Home() {
       title: schedaName, 
       coach_notes: coachNotes, 
       content: finalContent,
-      coach_id: coachUser // <--- QUI SALVIAMO IL PROPRIETARIO
+      coach_id: coachUser 
     };
 
     let error;
@@ -132,13 +155,13 @@ export default function Home() {
     } else {
       alert(editingId ? "Scheda aggiornata!" : "Scheda creata!");
       resetEditor();
-      fetchWorkouts(); // Ricarica solo le MIE schede
+      fetchWorkouts(); 
       setView('dashboard');
     }
     setUploading(false);
   };
 
-  // --- ALTRE FUNZIONI (Uguali a prima) ---
+  // --- ALTRE FUNZIONI (Standard) ---
   const handleDaysChange = (num) => {
     const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
     setDaysStructure(Array.from({ length: num }, (_, i) => `Giorno ${letters[i]}`));
@@ -212,7 +235,6 @@ export default function Home() {
 
   // --- RENDER: LOGIN ---
   if (!isAuthenticated) {
-    if (checkingAuth) return null;
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
         <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md text-center">
@@ -220,7 +242,7 @@ export default function Home() {
             <User className="text-blue-600" size={32} />
           </div>
           <h1 className="text-2xl font-bold text-slate-800 mb-2">Area Coach</h1>
-          <p className="text-slate-500 mb-6">Identificati per accedere alle tue schede.</p>
+          <p className="text-slate-500 mb-6">Identificati per accedere.</p>
           
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="text-left">
@@ -240,14 +262,15 @@ export default function Home() {
                 placeholder="Password..." 
                 className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"
                 value={inputPass}
-                onChange={(e) => { setInputPass(e.target.value); setAuthError(false); }}
+                onChange={(e) => { setInputPass(e.target.value); setLoginStatus("idle"); }}
               />
             </div>
 
-            {authError && <p className="text-red-500 text-sm font-bold animate-pulse">Dati non validi</p>}
+            {loginStatus === "error" && <p className="text-red-500 text-sm font-bold animate-pulse">Password Errata</p>}
+            {loginStatus === "unauthorized" && <p className="text-orange-500 text-sm font-bold animate-pulse">Coach non presente in anagrafica</p>}
             
-            <button type="submit" className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
-              Entra come {inputUser || 'Coach'}
+            <button type="submit" disabled={loginStatus === "loading"} className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 flex justify-center">
+               {loginStatus === "loading" ? <Loader2 className="animate-spin" /> : `Entra come ${inputUser || 'Coach'}`}
             </button>
           </form>
         </div>
@@ -255,7 +278,7 @@ export default function Home() {
     );
   }
 
-  // --- RENDER: DASHBOARD (Identica a prima, ma filtrata) ---
+  // --- RENDER: DASHBOARD ---
   if (view === 'dashboard') {
     return (
       <div className="min-h-screen bg-slate-50 font-sans p-8">
@@ -287,16 +310,26 @@ export default function Home() {
                   </div>
                   <h3 className="font-bold text-lg text-slate-800 mb-1">{workout.title}</h3>
                   <p className="text-xs text-slate-400 mb-6">{new Date(workout.created_at).toLocaleDateString()}</p>
-                  <div className="flex gap-2">
-                    <Link href={`/report/${workout.id}`} className="flex-1 bg-purple-50 text-purple-600 text-xs font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 hover:bg-purple-100"><Eye size={14} /> Report</Link>
-                    <Link href={`/scheda/${workout.id}`} className="flex-1 bg-blue-50 text-blue-600 text-xs font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-100"><ArrowRight size={14} /> Link</Link>
+                  
+                  {/* PULSANTI AZIONE */}
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <Link href={`/report/${workout.id}`} className="bg-purple-50 text-purple-600 text-xs font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 hover:bg-purple-100"><Eye size={14} /> Report</Link>
+                    <Link href={`/scheda/${workout.id}`} className="bg-blue-50 text-blue-600 text-xs font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-100"><ArrowRight size={14} /> Link</Link>
                   </div>
+                  
+                  {/* TASTO WHATSAPP */}
+                  <button 
+                    onClick={() => shareOnWhatsApp(workout.id, workout.title)}
+                    className="w-full bg-green-500 text-white text-xs font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 hover:bg-green-600 shadow-green-200 shadow-md transition-all"
+                  >
+                    <Share2 size={14} /> Invia su WhatsApp
+                  </button>
                 </div>
               ))}
               {savedWorkouts.length === 0 && (
                 <div className="col-span-full text-center py-20 border-2 border-dashed border-slate-200 rounded-3xl">
-                  <p className="text-slate-400 mb-4">Ciao {coachUser}, non hai ancora nessuna scheda.</p>
-                  <button onClick={() => { resetEditor(); setView('editor'); }} className="text-blue-600 font-bold underline">Crea la tua prima scheda</button>
+                  <p className="text-slate-400 mb-4">Ciao {coachUser}, archivio vuoto.</p>
+                  <button onClick={() => { resetEditor(); setView('editor'); }} className="text-blue-600 font-bold underline">Crea scheda</button>
                 </div>
               )}
             </div>
@@ -306,7 +339,7 @@ export default function Home() {
     );
   }
 
-  // --- RENDER: EDITOR (Identico a prima) ---
+  // --- RENDER: EDITOR (Identico) ---
   return (
     <div className="min-h-screen bg-white font-sans">
       <div className="border-b border-slate-100 p-4 flex justify-between items-center sticky top-0 bg-white/90 backdrop-blur-md z-10">
@@ -314,13 +347,11 @@ export default function Home() {
         <span className="font-bold text-slate-800">{editingId ? "Modifica" : "Nuova Scheda"} ({coachUser})</span>
         <button onClick={handleSave} disabled={uploading} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-black">{uploading ? <Loader2 className="animate-spin" size={16}/> : <><Save size={16}/> Salva</>}</button>
       </div>
-
       <div className="max-w-4xl mx-auto p-8">
         <div className="flex gap-8 mb-8 border-b border-slate-100">
           <button onClick={() => setActiveTab('setup')} className={`pb-4 text-sm font-bold transition-colors ${activeTab === 'setup' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400'}`}>1. Setup</button>
           <button onClick={startCreating} className={`pb-4 text-sm font-bold transition-colors ${activeTab === 'builder' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400'}`}>2. Esercizi</button>
         </div>
-
         {activeTab === 'setup' && (
           <div className="space-y-6 animate-fade-in">
             <div><label className="block text-xs font-bold text-slate-400 uppercase mb-2">Nome Scheda</label><input type="text" value={schedaName} onChange={e => setSchedaName(e.target.value)} className="w-full text-2xl font-bold border-b border-slate-200 py-2 focus:border-blue-600 outline-none placeholder:text-slate-200" placeholder="Es. Ipertrofia" /></div>
@@ -332,7 +363,6 @@ export default function Home() {
             <button onClick={startCreating} className="w-full bg-blue-50 text-blue-600 font-bold py-4 rounded-xl hover:bg-blue-100 transition-colors">Avanti <ArrowRight className="inline ml-2" size={16}/></button>
           </div>
         )}
-
         {activeTab === 'builder' && (
           <div className="animate-fade-in">
             <div className="grid lg:grid-cols-3 gap-8 items-start">
