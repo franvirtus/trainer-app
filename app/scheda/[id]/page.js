@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useParams } from 'next/navigation';
-import { Send, Check, Edit3, ArrowRight, MessageSquare, Calendar, Info } from 'lucide-react';
+import { Send, Check, Edit3, ArrowRight, MessageSquare, Calendar, Info, StickyNote } from 'lucide-react';
 
 export default function AthleteView() {
   const params = useParams(); 
@@ -10,6 +10,7 @@ export default function AthleteView() {
   const [loading, setLoading] = useState(true);
   
   const [groupedExercises, setGroupedExercises] = useState({});
+  const [dayNotes, setDayNotes] = useState({}); // NUOVO: Note specifiche per giorno
   const [days, setDays] = useState([]);
   const [activeTab, setActiveTab] = useState("");
   
@@ -31,16 +32,27 @@ export default function AthleteView() {
         setWorkout(template);
 
         const groups = {};
+        const extractedDayNotes = {};
         const foundDays = [];
 
         if (Array.isArray(template.content)) {
-          template.content.forEach((ex, index) => {
-            let dayName = "SCHEDA COMPLETA";
-            let exerciseName = ex.Esercizio;
+          template.content.forEach((item, index) => {
+            
+            // GESTIONE NUOVO TIPO: NOTA GIORNO
+            if (item.type === 'day_note') {
+              extractedDayNotes[item.day] = item.text;
+              return; // Non aggiungerlo agli esercizi
+            }
 
-            if (ex.Esercizio.includes(" - ")) {
-              const parts = ex.Esercizio.split(" - ");
-              dayName = parts[0].trim().toUpperCase();
+            // GESTIONE ESERCIZI STANDARD
+            let dayName = "SCHEDA COMPLETA";
+            let exerciseName = item.Esercizio;
+
+            if (item.Esercizio.includes(" - ")) {
+              const parts = item.Esercizio.split(" - ");
+              dayName = parts[0].trim();
+              // Normalizziamo il nome del giorno (Prima lettera maiuscola)
+              dayName = dayName.charAt(0).toUpperCase() + dayName.slice(1).toLowerCase();
               exerciseName = parts.slice(1).join(" - ").trim();
             }
 
@@ -50,7 +62,7 @@ export default function AthleteView() {
             }
 
             groups[dayName].push({
-              ...ex,
+              ...item,
               displayName: exerciseName,
               originalIndex: index
             });
@@ -58,9 +70,11 @@ export default function AthleteView() {
         }
 
         setGroupedExercises(groups);
+        setDayNotes(extractedDayNotes);
         setDays(foundDays);
         if (foundDays.length > 0) setActiveTab(foundDays[0]);
         
+        // Carica feedback esistenti...
         const { data: logs } = await supabase
           .from('workout_logs')
           .select('*')
@@ -70,8 +84,9 @@ export default function AthleteView() {
         if (logs && logs.length > 0 && template.content) {
           const historyMap = {};
           logs.forEach(log => {
+            // Logica semplice di matching note
             template.content.forEach((ex, index) => {
-              if (log.athlete_notes.startsWith(`[${ex.Esercizio}]`)) {
+               if (ex.Esercizio && log.athlete_notes.startsWith(`[${ex.Esercizio}]`)) {
                 const cleanText = log.athlete_notes.replace(`[${ex.Esercizio}]`, '').trim();
                 historyMap[index] = cleanText;
               }
@@ -157,10 +172,23 @@ export default function AthleteView() {
 
       <div className="px-4">
         
-        <div className="mb-4 ml-2 flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-widest">
-          <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-          {activeTab}
+        <div className="mb-4 ml-2 flex items-center justify-between text-slate-400 text-xs font-bold uppercase tracking-widest">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+            {activeTab}
+          </div>
         </div>
+
+        {/* NUOVO: BOX NOTE DEL GIORNO */}
+        {dayNotes[activeTab] && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start animate-fade-in-up">
+            <StickyNote className="text-amber-500 shrink-0 mt-0.5" size={18} />
+            <div>
+              <p className="text-[10px] font-bold text-amber-500 uppercase mb-1">Focus del Giorno</p>
+              <p className="text-sm text-slate-700 italic">{dayNotes[activeTab]}</p>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-5">
           {groupedExercises[activeTab] && groupedExercises[activeTab].map((item) => {
