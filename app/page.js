@@ -1,311 +1,283 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { supabase } from '@/lib/supabaseClient';
-import { Loader2, PlusCircle, Save, X, ChevronRight, LayoutList, CheckCircle, ArrowLeft } from 'lucide-react';
+import { UploadCloud, FileSpreadsheet, Loader2, ArrowRight, Eye, Trash2, Plus, List, Save, X, AlignLeft } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 
-export default function HomeCreator() {
-  const router = useRouter();
-  
-  // STATI DEL WIZARD
-  const [step, setStep] = useState(1); // 1 = Setup, 2 = Inserimento Esercizi
-  const [uploading, setUploading] = useState(false);
-
-  // DATI SCHEDA
+export default function Home() {
   const [schedaName, setSchedaName] = useState('');
-  const [totalDays, setTotalDays] = useState(null); // PARTIAMO DA NULL (Obbliga la scelta)
-  const [currentDayEditing, setCurrentDayEditing] = useState(1);
-  
-  // DATABASE LOCALE ESERCIZI
-  const [exercisesByDay, setExercisesByDay] = useState({});
+  const [coachNotes, setCoachNotes] = useState(''); // NUOVO: Stato per le note globali
+  const [savedWorkouts, setSavedWorkouts] = useState([]);
+  const [loadingWorkouts, setLoadingWorkouts] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [mode, setMode] = useState('excel');
+  const [file, setFile] = useState(null);
 
-  // INPUT CORRENTE
-  const [currentEx, setCurrentEx] = useState({ name: '', serie: '', reps: '', rec: '', video: '' });
+  const [manualExercises, setManualExercises] = useState([]);
+  const [currentEx, setCurrentEx] = useState({
+    day: '', 
+    name: '',
+    serie: '',
+    reps: '',
+    rec: '',
+    video: '',
+    note: '' // NUOVO: Note specifiche esercizio
+  });
 
-  // --- LOGICA STEP 1: SETUP ---
-  const handleStart = () => {
-    if (!schedaName) { alert("Dai un nome alla scheda!"); return; }
-    if (!totalDays) { alert("Seleziona quanti giorni dura la scheda!"); return; }
-    setStep(2);
+  useEffect(() => {
+    fetchWorkouts();
+  }, []);
+
+  const fetchWorkouts = async () => {
+    const { data, error } = await supabase
+      .from('workout_templates')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!error) setSavedWorkouts(data);
+    setLoadingWorkouts(false);
   };
 
-  // --- LOGICA STEP 2: AGGIUNTA ESERCIZI ---
-  const addExercise = () => {
-    if (!currentEx.name || !currentEx.serie || !currentEx.reps) {
-      alert("Compila nome, serie e reps"); return;
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) setFile(selectedFile);
+  };
+
+  const handleUploadExcel = async () => {
+    if (!file || !schedaName) {
+      alert("Inserisci un nome scheda e seleziona un file!");
+      return;
     }
-
-    const newEx = { ...currentEx };
-    
-    setExercisesByDay(prev => ({
-      ...prev,
-      [currentDayEditing]: [...(prev[currentDayEditing] || []), newEx]
-    }));
-
-    // Pulisce input
-    setCurrentEx({ name: '', serie: '', reps: '', rec: '', video: '' });
-  };
-
-  const removeExercise = (day, index) => {
-    setExercisesByDay(prev => {
-      const newList = [...prev[day]];
-      newList.splice(index, 1);
-      return { ...prev, [day]: newList };
-    });
-  };
-
-  // --- NAVIGAZIONE GIORNI ---
-  const nextDay = () => {
-    if (currentDayEditing < totalDays) {
-      setCurrentDayEditing(prev => prev + 1);
-    }
-  };
-
-  // --- SALVATAGGIO FINALE ---
-  const saveAll = async () => {
-    const hasExercises = Object.keys(exercisesByDay).length > 0;
-    if (!hasExercises) { alert("La scheda è vuota!"); return; }
-
     setUploading(true);
 
-    let flatContent = [];
-    
-    for (let d = 1; d <= totalDays; d++) {
-      const dayExercises = exercisesByDay[d] || [];
-      dayExercises.forEach(ex => {
-        flatContent.push({
-          Esercizio: `GIORNO ${d} - ${ex.name}`,
-          Serie: ex.serie,
-          Reps: ex.reps,
-          Recupero: ex.rec || '60s',
-          Video: ex.video
-        });
-      });
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+      await saveToSupabase(jsonData);
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const addExerciseToManualList = () => {
+    if (!currentEx.name || !currentEx.serie || !currentEx.reps) {
+      alert("Compila almeno Nome, Serie e Reps.");
+      return;
     }
 
-    const { error } = await supabase
+    const fullName = currentEx.day 
+      ? `${currentEx.day.toUpperCase()} - ${currentEx.name}` 
+      : currentEx.name;
+
+    const newExercise = {
+      Esercizio: fullName,
+      Serie: currentEx.serie,
+      Reps: currentEx.reps,
+      Recupero: currentEx.rec || '60s',
+      Video: currentEx.video,
+      Note: currentEx.note // Salviamo la nota specifica
+    };
+
+    setManualExercises([...manualExercises, newExercise]);
+    setCurrentEx({ ...currentEx, name: '', serie: '', reps: '', rec: '', video: '', note: '' });
+  };
+
+  const removeExercise = (index) => {
+    const newList = [...manualExercises];
+    newList.splice(index, 1);
+    setManualExercises(newList);
+  };
+
+  const handleSaveManual = async () => {
+    if (!schedaName || manualExercises.length === 0) {
+      alert("Inserisci un nome scheda e aggiungi almeno un esercizio!");
+      return;
+    }
+    setUploading(true);
+    await saveToSupabase(manualExercises);
+  };
+
+  const saveToSupabase = async (contentData) => {
+    const { data: insertedData, error } = await supabase
       .from('workout_templates')
-      .insert([{ title: schedaName, content: flatContent }]);
+      .insert([{ 
+        title: schedaName, 
+        coach_notes: coachNotes, // Salviamo le note globali
+        content: contentData 
+      }])
+      .select();
 
     if (error) {
       alert("Errore: " + error.message);
-      setUploading(false);
     } else {
-      router.push('/dashboard');
+      alert("Scheda salvata con successo!");
+      setFile(null);
+      setSchedaName('');
+      setCoachNotes('');
+      setManualExercises([]);
+      setMode('excel');
+      fetchWorkouts();
     }
+    setUploading(false);
+  };
+
+  const deleteWorkout = async (id) => {
+    if (!confirm("Eliminare questa scheda?")) return;
+    await supabase.from('workout_logs').delete().eq('assignment_id', id);
+    const { error } = await supabase.from('workout_templates').delete().eq('id', id);
+    if (!error) setSavedWorkouts(prev => prev.filter(w => w.id !== id));
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans p-4 flex flex-col items-center justify-center">
-      
-      <div className="max-w-2xl w-full bg-white rounded-3xl shadow-xl overflow-hidden">
+    <div className="min-h-screen bg-slate-50 font-sans p-8">
+      <div className="max-w-6xl mx-auto">
         
         {/* HEADER */}
-        <div className="bg-blue-600 p-6 text-white flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            {step === 2 && (
-              <button onClick={() => setStep(1)} className="bg-white/20 p-2 rounded-full hover:bg-white/30 transition-all">
-                <ArrowLeft size={20} />
-              </button>
-            )}
-            <div>
-              <h1 className="text-2xl font-bold">{step === 1 ? 'Nuova Scheda' : schedaName}</h1>
-              <p className="opacity-80 text-xs uppercase font-bold tracking-wider">Passo {step} di 2</p>
-            </div>
+        <div className="bg-blue-600 text-white p-8 rounded-3xl shadow-xl mb-10 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">Trainer Dashboard</h1>
+            <p className="opacity-80">Gestisci schede e note</p>
           </div>
-          <Link href="/dashboard" className="bg-white/10 hover:bg-white/20 px-3 py-2 rounded-lg text-[10px] font-bold transition-all uppercase tracking-widest border border-white/20">
-            Archivio
-          </Link>
+          <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm min-w-[100px] text-center">
+            <span className="text-2xl font-bold block">{savedWorkouts.length}</span>
+            <span className="text-[10px] opacity-80 uppercase tracking-widest">Schede</span>
+          </div>
         </div>
 
-        {/* --- STEP 1: SETUP --- */}
-        {step === 1 && (
-          <div className="p-8 space-y-8 animate-fade-in">
-            <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Nome Atleta / Scheda</label>
+        <div className="grid lg:grid-cols-2 gap-8">
+          
+          {/* CREATOR */}
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 h-fit">
+            
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-1">1. Nome Atleta / Scheda</label>
               <input 
-                autoFocus
                 type="text" 
-                placeholder="Es. Marco - Ipertrofia" 
-                className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl p-4 text-lg font-bold outline-none focus:border-blue-500 transition-all text-slate-800"
+                placeholder="Es. Giulia - Tonificazione" 
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-700"
                 value={schedaName}
-                onChange={e => setSchedaName(e.target.value)}
+                onChange={(e) => setSchedaName(e.target.value)}
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase mb-3">Giorni di Allenamento (Split)</label>
-              <div className="grid grid-cols-6 gap-2">
-                {[1, 2, 3, 4, 5, 6].map(num => (
-                  <button
-                    key={num}
-                    onClick={() => setTotalDays(num)}
-                    className={`aspect-square rounded-xl font-bold text-xl transition-all border-2 flex items-center justify-center ${
-                      totalDays === num 
-                        ? 'border-blue-500 bg-blue-600 text-white shadow-lg scale-105' 
-                        : 'border-slate-100 text-slate-400 hover:border-slate-300 hover:bg-slate-50'
-                    }`}
-                  >
-                    {num}
-                  </button>
-                ))}
-              </div>
+            {/* NUOVO CAMPO NOTE GLOBALI */}
+            <div className="mb-6">
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-1">2. Note Generali / Obiettivi (Opzionale)</label>
+              <textarea 
+                placeholder="Es. Questa settimana concentrati sulla fase eccentrica. Attenzione alla spalla nel Giorno B." 
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 text-sm h-24 resize-none"
+                value={coachNotes}
+                onChange={(e) => setCoachNotes(e.target.value)}
+              />
             </div>
 
-            <button 
-              onClick={handleStart}
-              disabled={!schedaName || !totalDays}
-              className={`w-full font-bold py-4 rounded-xl shadow-lg transition-all flex justify-center items-center gap-2 mt-4 text-lg
-                ${(!schedaName || !totalDays) 
-                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
-                  : 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95'}`}
-            >
-              INIZIA CREAZIONE <ChevronRight />
-            </button>
+            {/* TOGGLE */}
+            <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
+              <button onClick={() => setMode('excel')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${mode === 'excel' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>
+                <FileSpreadsheet size={16} /> Da Excel
+              </button>
+              <button onClick={() => setMode('manual')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${mode === 'manual' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>
+                <List size={16} /> Manuale
+              </button>
+            </div>
+
+            {mode === 'excel' && (
+              <div className="animate-fade-in space-y-4">
+                <div className="border-2 border-dashed border-slate-200 rounded-xl p-10 text-center hover:bg-blue-50 hover:border-blue-300 transition-all cursor-pointer relative">
+                  <input type="file" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
+                  <UploadCloud className="mx-auto text-slate-300 mb-3" size={48} />
+                  <p className="text-sm text-slate-500 font-medium">{file ? <span className="text-green-600 font-bold">{file.name}</span> : "Trascina Excel qui"}</p>
+                </div>
+                <button onClick={handleUploadExcel} disabled={uploading} className="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-black transition-all flex justify-center items-center gap-2">
+                  {uploading ? <Loader2 className="animate-spin" /> : "Salva Scheda"}
+                </button>
+              </div>
+            )}
+
+            {mode === 'manual' && (
+              <div className="animate-fade-in">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-4 space-y-3">
+                  <div className="flex gap-2">
+                     <div className="w-1/3">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase">Giorno</label>
+                      <input type="text" placeholder="Giorno A" className="w-full p-2 rounded-lg border border-slate-200 text-sm" value={currentEx.day} onChange={e => setCurrentEx({...currentEx, day: e.target.value})} />
+                    </div>
+                    <div className="w-2/3">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase">Esercizio</label>
+                      <input type="text" placeholder="Es. Squat" className="w-full p-2 rounded-lg border border-slate-200 text-sm" value={currentEx.name} onChange={e => setCurrentEx({...currentEx, name: e.target.value})} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div><label className="text-[10px] font-bold text-slate-400 uppercase">Serie</label><input type="text" placeholder="4" className="w-full p-2 rounded-lg border border-slate-200 text-sm" value={currentEx.serie} onChange={e => setCurrentEx({...currentEx, serie: e.target.value})} /></div>
+                    <div><label className="text-[10px] font-bold text-slate-400 uppercase">Reps</label><input type="text" placeholder="10" className="w-full p-2 rounded-lg border border-slate-200 text-sm" value={currentEx.reps} onChange={e => setCurrentEx({...currentEx, reps: e.target.value})} /></div>
+                    <div><label className="text-[10px] font-bold text-slate-400 uppercase">Rec</label><input type="text" placeholder="60s" className="w-full p-2 rounded-lg border border-slate-200 text-sm" value={currentEx.rec} onChange={e => setCurrentEx({...currentEx, rec: e.target.value})} /></div>
+                  </div>
+                  
+                  {/* NUOVO CAMPO NOTE SPECIFICHE ESERCIZIO */}
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">Note Esercizio (Opz)</label>
+                    <input type="text" placeholder="Es. Gomiti stretti, fermo al petto..." className="w-full p-2 rounded-lg border border-slate-200 text-sm" value={currentEx.note} onChange={e => setCurrentEx({...currentEx, note: e.target.value})} />
+                  </div>
+
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase">Video URL</label>
+                      <input type="text" placeholder="https://..." className="w-full p-2 rounded-lg border border-slate-200 text-sm" value={currentEx.video} onChange={e => setCurrentEx({...currentEx, video: e.target.value})} />
+                    </div>
+                    <button onClick={addExerciseToManualList} className="bg-blue-600 text-white p-2.5 rounded-lg hover:bg-blue-700 transition-colors"><Plus size={20} /></button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 mb-4 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
+                  {manualExercises.map((ex, i) => (
+                    <div key={i} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100 shadow-sm text-sm">
+                      <div>
+                        <span className="font-bold text-slate-700 block">{ex.Esercizio}</span>
+                        <span className="text-xs text-slate-500">{ex.Serie}x{ex.Reps} {ex.Note && `• Note: ${ex.Note}`}</span>
+                      </div>
+                      <button onClick={() => removeExercise(i)} className="text-slate-300 hover:text-red-500"><X size={16} /></button>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={handleSaveManual} disabled={uploading} className="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-black transition-all flex justify-center items-center gap-2">
+                  {uploading ? <Loader2 className="animate-spin" /> : <><Save size={18}/> Salva Scheda</>}
+                </button>
+              </div>
+            )}
           </div>
-        )}
 
-        {/* --- STEP 2: RIEMPIMENTO --- */}
-        {step === 2 && (
-          <div className="animate-fade-in">
-            
-            {/* Navigazione Giorni (Tab in alto) */}
-            <div className="flex overflow-x-auto bg-slate-50 p-2 gap-2 border-b border-slate-100 scrollbar-hide">
-              {Array.from({ length: totalDays }, (_, i) => i + 1).map(dayNum => (
-                <button
-                  key={dayNum}
-                  onClick={() => setCurrentDayEditing(dayNum)}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all uppercase tracking-wider ${
-                    currentDayEditing === dayNum
-                      ? 'bg-white text-blue-600 shadow-md border border-slate-100 ring-2 ring-blue-50'
-                      : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  Giorno {dayNum}
-                </button>
-              ))}
-            </div>
-
-            <div className="p-6">
-              <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                <LayoutList className="text-blue-500" size={20} />
-                <span className="uppercase">Modifica Giorno {currentDayEditing}</span>
-              </h2>
-
-              {/* INPUT ESERCIZIO - Layout GRIGLIA (Risolve il problema Reps) */}
-              <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100 mb-6 space-y-3 shadow-sm">
-                
-                {/* Riga 1: Nome (50%), Serie (25%), Reps (25%) */}
-                <div className="grid grid-cols-4 gap-3">
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-bold text-blue-400 uppercase pl-1 mb-1 block">Esercizio</label>
-                    <input 
-                      className="w-full p-3 rounded-xl border border-blue-200 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 text-slate-700"
-                      placeholder="Es. Panca"
-                      value={currentEx.name}
-                      onChange={e => setCurrentEx({...currentEx, name: e.target.value})}
-                    />
-                  </div>
-                  <div className="col-span-1">
-                    <label className="text-[10px] font-bold text-blue-400 uppercase pl-1 mb-1 block text-center">Serie</label>
-                    <input 
-                      className="w-full p-3 rounded-xl border border-blue-200 text-sm text-center font-bold outline-none focus:ring-2 focus:ring-blue-500 text-slate-700"
-                      placeholder="3"
-                      inputMode="numeric"
-                      value={currentEx.serie}
-                      onChange={e => setCurrentEx({...currentEx, serie: e.target.value})}
-                    />
-                  </div>
-                  <div className="col-span-1">
-                    <label className="text-[10px] font-bold text-blue-400 uppercase pl-1 mb-1 block text-center">Reps</label>
-                    <input 
-                      className="w-full p-3 rounded-xl border border-blue-200 text-sm text-center font-bold outline-none focus:ring-2 focus:ring-blue-500 text-slate-700"
-                      placeholder="10"
-                      value={currentEx.reps}
-                      onChange={e => setCurrentEx({...currentEx, reps: e.target.value})}
-                    />
-                  </div>
-                </div>
-
-                {/* Riga 2: Rec e Video */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-1">
-                    <input 
-                      className="w-full p-3 rounded-xl border border-blue-200 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-center"
-                      placeholder="Rec (90s)"
-                      value={currentEx.rec}
-                      onChange={e => setCurrentEx({...currentEx, rec: e.target.value})}
-                    />
-                  </div>
-                   <div className="col-span-2">
-                    <input 
-                      className="w-full p-3 rounded-xl border border-blue-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Link Video YouTube (Opzionale)"
-                      value={currentEx.video}
-                      onChange={e => setCurrentEx({...currentEx, video: e.target.value})}
-                    />
-                  </div>
-                </div>
-
-                <button 
-                  onClick={addExercise}
-                  className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-md hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center gap-2"
-                >
-                  <PlusCircle size={18} /> AGGIUNGI A GIORNO {currentDayEditing}
-                </button>
-              </div>
-
-              {/* LISTA ESERCIZI DEL GIORNO CORRENTE */}
-              <div className="space-y-2 mb-8 min-h-[150px]">
-                {(!exercisesByDay[currentDayEditing] || exercisesByDay[currentDayEditing].length === 0) && (
-                  <div className="text-center py-8 opacity-50 border-2 border-dashed border-slate-200 rounded-xl">
-                    <p className="text-slate-400 text-sm font-bold">Giorno {currentDayEditing} vuoto</p>
-                    <p className="text-xs text-slate-300">Aggiungi esercizi sopra</p>
-                  </div>
-                )}
-                
-                {exercisesByDay[currentDayEditing]?.map((ex, i) => (
-                  <div key={i} className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-sm animate-fade-in-up hover:border-blue-300 transition-colors">
-                    <div>
-                      <span className="font-bold text-slate-800 block text-base">{ex.name}</span>
-                      <div className="flex gap-3 text-xs text-slate-500 mt-1 font-mono uppercase bg-slate-50 inline-block px-2 py-1 rounded-md">
-                        <span><b className="text-slate-700">{ex.serie}</b> Serie</span>
-                        <span><b className="text-slate-700">{ex.reps}</b> Reps</span>
-                        <span>Rec: {ex.rec || '60s'}</span>
+          {/* LISTA SCHEDE */}
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Eye className="text-purple-500" /> Schede Recenti</h2>
+            {loadingWorkouts ? <p className="text-slate-400 text-sm">Caricamento...</p> : (
+              <div className="space-y-3 h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                {savedWorkouts.map((workout) => (
+                  <div key={workout.id} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all group relative">
+                    <button onClick={() => deleteWorkout(workout.id)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors p-1"><Trash2 size={16} /></button>
+                    <div className="flex justify-between items-start mb-4 pr-8">
+                      <div>
+                        <h3 className="font-bold text-slate-800">{workout.title}</h3>
+                        <p className="text-xs text-slate-400">{new Date(workout.created_at).toLocaleDateString()}</p>
                       </div>
                     </div>
-                    <button onClick={() => removeExercise(currentDayEditing, i)} className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all">
-                      <X size={20} />
-                    </button>
+                    <div className="flex gap-2">
+                      <Link href={`/report/${workout.id}`} className="flex-1 bg-purple-50 text-purple-600 text-sm font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 hover:bg-purple-100 border border-purple-100"><Eye size={16} /> Report</Link>
+                      <Link href={`/scheda/${workout.id}`} className="flex-1 bg-blue-50 text-blue-600 text-sm font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 hover:bg-blue-100 border border-blue-100"><ArrowRight size={16} /> Scheda</Link>
+                    </div>
+                    <div className="mt-3 text-center">
+                       <button onClick={() => {navigator.clipboard.writeText(`https://trainer-app-nine.vercel.app/scheda/${workout.id}`); alert("Link copiato!");}} className="text-[10px] text-slate-400 hover:text-blue-500 underline">Copia Link</button>
+                    </div>
                   </div>
                 ))}
               </div>
-
-              {/* FOOTER ACTIONS */}
-              <div className="flex gap-3 pt-4 border-t border-slate-100 sticky bottom-0 bg-white pb-2">
-                {currentDayEditing < totalDays ? (
-                  <button 
-                    onClick={nextDay}
-                    className="w-full bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-black transition-all flex justify-center items-center gap-2"
-                  >
-                    COMPILA GIORNO {currentDayEditing + 1} <ChevronRight />
-                  </button>
-                ) : (
-                  <button 
-                    onClick={saveAll}
-                    disabled={uploading}
-                    className="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-green-700 transition-all flex justify-center items-center gap-2 animate-pulse-slow"
-                  >
-                    {uploading ? <Loader2 className="animate-spin" /> : <><CheckCircle /> SALVA SCHEDA</>}
-                  </button>
-                )}
-              </div>
-
-            </div>
+            )}
           </div>
-        )}
-
+        </div>
       </div>
     </div>
   );

@@ -2,17 +2,16 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useParams } from 'next/navigation';
-import { Send, Check, Edit3, ArrowRight, MessageSquare, Calendar } from 'lucide-react';
+import { Send, Check, Edit3, ArrowRight, MessageSquare, Calendar, Info } from 'lucide-react';
 
 export default function AthleteView() {
   const params = useParams(); 
   const [workout, setWorkout] = useState(null);
   const [loading, setLoading] = useState(true);
   
-  // STATI PER LA GESTIONE GIORNI (TAB)
-  const [groupedExercises, setGroupedExercises] = useState({}); // Contiene gli esercizi divisi per giorno
-  const [days, setDays] = useState([]); // Lista dei giorni trovati (es. ["GIORNO A", "GIORNO B"])
-  const [activeTab, setActiveTab] = useState(""); // Quale giorno stiamo guardando ora
+  const [groupedExercises, setGroupedExercises] = useState({});
+  const [days, setDays] = useState([]);
+  const [activeTab, setActiveTab] = useState("");
   
   const [exerciseNotes, setExerciseNotes] = useState({});
   const [sentStatus, setSentStatus] = useState({});
@@ -22,7 +21,6 @@ export default function AthleteView() {
     const fetchData = async () => {
       if (!params.id) return;
 
-      // 1. Carica la Scheda
       const { data: template } = await supabase
         .from('workout_templates')
         .select('*')
@@ -32,20 +30,18 @@ export default function AthleteView() {
       if (template) {
         setWorkout(template);
 
-        // --- LOGICA DI RAGGRUPPAMENTO GIORNI ---
         const groups = {};
         const foundDays = [];
 
         if (Array.isArray(template.content)) {
           template.content.forEach((ex, index) => {
-            // Cerchiamo di dividere "GIORNO A - Squat" usando il trattino
             let dayName = "SCHEDA COMPLETA";
             let exerciseName = ex.Esercizio;
 
             if (ex.Esercizio.includes(" - ")) {
               const parts = ex.Esercizio.split(" - ");
-              dayName = parts[0].trim().toUpperCase(); // "GIORNO A"
-              exerciseName = parts.slice(1).join(" - ").trim(); // "Squat..."
+              dayName = parts[0].trim().toUpperCase();
+              exerciseName = parts.slice(1).join(" - ").trim();
             }
 
             if (!groups[dayName]) {
@@ -53,24 +49,18 @@ export default function AthleteView() {
               foundDays.push(dayName);
             }
 
-            // Salviamo l'esercizio con il suo indice originale (importante per il salvataggio!)
             groups[dayName].push({
               ...ex,
-              displayName: exerciseName, // Nome pulito senza "GIORNO A"
-              originalIndex: index      // Indice reale nel database
+              displayName: exerciseName,
+              originalIndex: index
             });
           });
         }
 
         setGroupedExercises(groups);
         setDays(foundDays);
-        // Seleziona automaticamente il primo giorno trovato
         if (foundDays.length > 0) setActiveTab(foundDays[0]);
         
-        // --- FINE LOGICA RAGGRUPPAMENTO ---
-
-        
-        // 2. Carica i feedback già inviati
         const { data: logs } = await supabase
           .from('workout_logs')
           .select('*')
@@ -81,7 +71,6 @@ export default function AthleteView() {
           const historyMap = {};
           logs.forEach(log => {
             template.content.forEach((ex, index) => {
-              // Verifica a quale esercizio appartiene la nota
               if (log.athlete_notes.startsWith(`[${ex.Esercizio}]`)) {
                 const cleanText = log.athlete_notes.replace(`[${ex.Esercizio}]`, '').trim();
                 historyMap[index] = cleanText;
@@ -98,13 +87,9 @@ export default function AthleteView() {
   }, [params.id]);
 
   const handleNoteChange = (originalIndex, text) => {
-    setExerciseNotes(prev => ({
-      ...prev,
-      [originalIndex]: text
-    }));
+    setExerciseNotes(prev => ({ ...prev, [originalIndex]: text }));
   };
 
-  // Salva usando l'indice originale, non quello della vista filtrata
   const saveSingleNote = async (originalIndex, fullExerciseName) => {
     const noteText = exerciseNotes[originalIndex];
     if (!noteText || noteText.trim() === "") return;
@@ -113,21 +98,17 @@ export default function AthleteView() {
 
     const { error } = await supabase
       .from('workout_logs')
-      .insert([
-        { 
+      .insert([{ 
           assignment_id: params.id, 
           athlete_notes: contentToSave,
           completed_at: new Date().toISOString()
-        }
-      ]);
+        }]);
 
     if (!error) {
       setFeedbackHistory(prev => ({ ...prev, [originalIndex]: noteText }));
       setExerciseNotes(prev => ({ ...prev, [originalIndex]: '' }));
       setSentStatus(prev => ({ ...prev, [originalIndex]: true }));
-      setTimeout(() => {
-        setSentStatus(prev => ({ ...prev, [originalIndex]: false }));
-      }, 2000);
+      setTimeout(() => setSentStatus(prev => ({ ...prev, [originalIndex]: false })), 2000);
     } else {
       alert("Errore: " + error.message);
     }
@@ -139,14 +120,21 @@ export default function AthleteView() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans pb-10">
       
-      {/* Header Fisso in alto */}
+      {/* Header Fisso */}
       <div className="bg-blue-600 pb-6 pt-8 text-white rounded-b-[2rem] shadow-lg mb-4 sticky top-0 z-50">
         <div className="px-6">
           <h1 className="text-xl font-bold truncate">{workout.title}</h1>
-          <p className="opacity-80 text-xs mt-1">{workout.description}</p>
+          
+          {/* NOTE DEL COACH GLOBALI */}
+          {workout.coach_notes && (
+            <div className="mt-3 bg-blue-800/50 p-3 rounded-xl border border-blue-400/30 flex gap-3 items-start">
+              <Info size={18} className="text-blue-200 shrink-0 mt-0.5" />
+              <p className="text-sm text-blue-100 italic leading-relaxed">{workout.coach_notes}</p>
+            </div>
+          )}
         </div>
 
-        {/* MENU DEI GIORNI (TABS SCROLLABILI) */}
+        {/* TABS */}
         {days.length > 1 && (
           <div className="mt-6 flex gap-3 overflow-x-auto px-6 pb-2 no-scrollbar">
             {days.map((day) => (
@@ -169,27 +157,21 @@ export default function AthleteView() {
 
       <div className="px-4">
         
-        {/* Titolo del Giorno Selezionato */}
         <div className="mb-4 ml-2 flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-widest">
           <div className="w-2 h-2 rounded-full bg-blue-500"></div>
           {activeTab}
         </div>
 
-        {/* Lista Esercizi FILTRATA per il giorno attivo */}
         <div className="space-y-5">
           {groupedExercises[activeTab] && groupedExercises[activeTab].map((item) => {
-            // Estraiamo i dati utili. "item.originalIndex" è fondamentale per non perdere i riferimenti
             const i = item.originalIndex; 
             
             return (
               <div key={i} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden animate-fade-in-up">
                 
-                {/* Header Card */}
                 <div className="p-5 border-b border-slate-50 relative">
                   <div className="flex justify-between items-start mb-4">
-                    <h3 className="font-bold text-lg text-slate-800 w-3/4 leading-tight">
-                      {item.displayName} {/* Mostriamo il nome pulito senza GIORNO A */}
-                    </h3>
+                    <h3 className="font-bold text-lg text-slate-800 w-3/4 leading-tight">{item.displayName}</h3>
                     {item.Video && (
                       <a href={item.Video} target="_blank" className="text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100 active:bg-blue-200 transition-colors">
                         <ArrowRight size={18} />
@@ -197,7 +179,7 @@ export default function AthleteView() {
                     )}
                   </div>
                   
-                  <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="grid grid-cols-3 gap-2 text-center mb-3">
                     <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
                       <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider">Serie</span>
                       <span className="font-bold text-slate-700 text-lg">{item.Serie}</span>
@@ -211,9 +193,17 @@ export default function AthleteView() {
                       <span className="font-bold text-slate-700 text-lg">{item.Recupero || '60s'}</span>
                     </div>
                   </div>
+
+                  {/* NOTA SPECIFICA ESERCIZIO */}
+                  {item.Note && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm text-slate-600 italic">
+                      <span className="font-bold text-slate-400 text-[10px] uppercase block mb-1">Tip Coach:</span>
+                      {item.Note}
+                    </div>
+                  )}
                 </div>
 
-                {/* Feedback Storico (se esiste) */}
+                {/* Feedback Storico */}
                 {feedbackHistory[i] && (
                   <div className="bg-green-50/80 px-4 py-3 border-l-4 border-green-500 flex gap-3 items-start">
                     <MessageSquare size={16} className="text-green-600 mt-1 shrink-0"/>
@@ -224,10 +214,9 @@ export default function AthleteView() {
                   </div>
                 )}
 
-                {/* Input Feedback */}
                 <div className="bg-slate-50 p-3 flex gap-2 items-center">
                   <div className="relative flex-1 group">
-                    <div className="absolute top-3.5 left-3 text-slate-400 group-focus-within:text-blue-500 transition-colors">
+                    <div className="absolute top-3.5 left-3 text-slate-400">
                       <Edit3 size={14} />
                     </div>
                     <input 
@@ -240,11 +229,9 @@ export default function AthleteView() {
                   </div>
                   
                   <button 
-                    onClick={() => saveSingleNote(i, item.Esercizio)} // Passiamo il nome completo per il DB
+                    onClick={() => saveSingleNote(i, item.Esercizio)} 
                     className={`p-3 rounded-xl shadow-md transition-all active:scale-95 duration-200 ${
-                      sentStatus[i] 
-                        ? 'bg-green-500 text-white shadow-green-200' 
-                        : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'
+                      sentStatus[i] ? 'bg-green-500 text-white shadow-green-200' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'
                     }`}
                   >
                     {sentStatus[i] ? <Check size={20} /> : <Send size={20} />}
@@ -256,12 +243,10 @@ export default function AthleteView() {
           })}
         </div>
         
-        {/* Footer spazio vuoto */}
         <div className="h-20 text-center flex flex-col items-center justify-center opacity-30 mt-8">
           <div className="w-12 h-1 bg-slate-300 rounded-full mb-2"></div>
           <p className="text-[10px] uppercase font-bold text-slate-400">Fine Allenamento</p>
         </div>
-
       </div>
     </div>
   );
