@@ -17,51 +17,72 @@ export default function LiveSheetViewer() {
   const [days, setDays] = useState([]);
   const [activeTab, setActiveTab] = useState("");
   
-  // Stati per feedback
   const [exerciseNotes, setExerciseNotes] = useState({});
   const [sentStatus, setSentStatus] = useState({});
   const [feedbackHistory, setFeedbackHistory] = useState({});
 
-  // --- PARSER INTELLIGENTE (Configurato per il tuo file Excel) ---
+  // --- PARSER UNIVERSALE (Supporta il tuo Tracker e Liste Semplici) ---
   const parseCSV = (csvText) => {
     const lines = csvText.split('\n').map(l => l.trim()).filter(l => l !== '');
-    
-    let tableStartIndex = -1;
+    const exercises = [];
+    let currentDay = "Scheda"; // Fallback
 
-    // 1. SCANSIONE: Cerchiamo la riga che inizia con "Giorno"
+    // Strategia: Analizziamo riga per riga
     lines.forEach((line, index) => {
-      if (line.toLowerCase().startsWith("giorno") || line.toLowerCase().startsWith("\"giorno")) {
-        tableStartIndex = index;
+      // Regex per dividere le colonne mantenendo le virgole dentro le virgolette
+      const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(txt => txt ? txt.replace(/^"|"$/g, '').trim() : '');
+
+      // LOGICA PER IL TUO FILE "TRACKER" (Foglio1)
+      // Col 0: Nome Esercizio o Intestazione (es. "SCHEDA A")
+      // Col 2: Note (Spiegazione)
+      // Col 4: Recupero
+      // Col 6: Protocollo (es. "3x10-12") - Colonna G
+      
+      const colA = cols[0] || ""; // Esercizio o Header
+      
+      // 1. Cerca intestazioni tipo "SCHEDA A", "SCHEDA B"
+      if (colA.toUpperCase().startsWith("SCHEDA") && !colA.toUpperCase().includes("CIRCUITO")) {
+         // Pulisci il nome (es. togli le virgole extra se ci sono)
+         currentDay = colA.split(",")[0].trim();
+         // Formatta bello (es. "Scheda A")
+         currentDay = currentDay.charAt(0).toUpperCase() + currentDay.slice(1).toLowerCase();
+         return; // Passa alla prossima riga
+      }
+
+      // 2. Riconosce un esercizio: Ha un nome in Col A E un protocollo in Col G (indice 6)
+      // (Ignoriamo righe come "spiegazione", "recupero", "Note:" o righe vuote)
+      if (colA.length > 2 && cols[6] && !colA.toLowerCase().includes("spiegazione") && !colA.toLowerCase().includes("note:")) {
+          
+          exercises.push({
+            DayTag: currentDay,
+            Esercizio: colA,
+            Serie: cols[6],    // Mettiamo "3x10-12" qui
+            Reps: "",          // Già incluso in serie nel tuo formato
+            Recupero: cols[4] || "",
+            Note: cols[2] || "", // Spiegazione
+            Video: cols[9] || "" // Se c'è video in colonna J, altrimenti vuoto
+          });
+          return;
+      }
+
+      // LOGICA FALLBACK (Per file semplici "Giorno, Esercizio...")
+      // Se troviamo la colonna "Giorno" esplicita, usiamo quella logica
+      if (cols[0].toLowerCase() === "giorno" && cols[2].toLowerCase() === "esercizio") {
+          // Ignora riga intestazione
+      } else if (line.toLowerCase().startsWith("giorno") && cols[2]) {
+           exercises.push({
+            DayTag: cols[0],
+            Esercizio: cols[2],
+            Serie: cols[3],
+            Reps: cols[4],
+            Recupero: cols[5],
+            Video: cols[9],
+            Note: cols[8]
+          });
       }
     });
 
-    if (tableStartIndex === -1) {
-      console.warn("Intestazione 'Giorno' non trovata, provo fallback riga 0");
-      tableStartIndex = 0; 
-    }
-
-    // 2. ESTRAZIONE DATI
-    const dataLines = lines.slice(tableStartIndex + 1);
-
-    return dataLines.map(line => {
-      // Regex per CSV standard (gestisce virgole tra virgolette)
-      const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); 
-      const clean = (txt) => txt ? txt.replace(/^"|"$/g, '').trim() : '';
-
-      // Controllo sicurezza riga vuota
-      if (!cols[2]) return null; 
-
-      // MAPPATURA SPECIFICA PER IL TUO FILE
-      return {
-        DayTag: clean(cols[0]) || 'Extra',
-        Esercizio: clean(cols[2]), // Esercizio colonna C (indice 2)
-        Serie: clean(cols[3]),
-        Reps: clean(cols[4]),
-        Recupero: clean(cols[5]),
-        Video: clean(cols[9]),     // Video colonna J (indice 9)
-        Note: clean(cols[8])       // Note colonna I (indice 8)
-      };
-    }).filter(row => row && row.Esercizio); 
+    return exercises;
   };
 
   useEffect(() => {
@@ -69,28 +90,32 @@ export default function LiveSheetViewer() {
       if (!sheetId) return;
       
       try {
-        // Usiamo il nostro ponte interno per evitare l'errore CORS
+        // Usa il tuo proxy API
         const csvUrl = `/api/sheet?id=${sheetId}`;
         
         const res = await fetch(csvUrl);
-        if (!res.ok) throw new Error("Impossibile caricare. Assicurati che il foglio sia Pubblicato sul Web (File > Condividi > Pubblica sul Web).");
+        if (!res.ok) throw new Error("Errore nel caricamento del foglio.");
         
         const csvText = await res.text();
-        const rawData = parseCSV(csvText); // Usiamo il parser qui
+        
+        // Se il proxy ritorna errore JSON invece del CSV
+        if (csvText.includes('"error":')) {
+           throw new Error("Assicurati di aver fatto 'File > Pubblica sul Web' come CSV.");
+        }
 
-        // --- TRASFORMAZIONE DATI PER INTERFACCIA ---
+        const rawData = parseCSV(csvText);
+
+        if (rawData.length === 0) {
+           console.warn("Nessun esercizio trovato. Controlla il formato.");
+        }
+
+        // Raggruppamento dati
         const groups = {};
         const foundDays = [];
 
         rawData.forEach((row, index) => {
             let dayName = row.DayTag;
-            let exerciseName = row.Esercizio;
-
-            // Formattazione "Giorno A"
-            if (dayName.toLowerCase().startsWith("giorno")) {
-                dayName = dayName.charAt(0).toUpperCase() + dayName.slice(1).toLowerCase();
-            }
-
+            
             if (!groups[dayName]) {
                 groups[dayName] = [];
                 foundDays.push(dayName);
@@ -98,12 +123,12 @@ export default function LiveSheetViewer() {
 
             groups[dayName].push({
                 ...row,
-                displayName: exerciseName,
+                displayName: row.Esercizio,
                 originalIndex: index 
             });
         });
 
-        // --- CARICAMENTO STORICO LOG ---
+        // Caricamento storico
         const { data: logs } = await supabase
             .from('workout_logs')
             .select('*')
@@ -114,11 +139,11 @@ export default function LiveSheetViewer() {
             const historyMap = {};
             logs.forEach(log => {
                  rawData.forEach((row, idx) => {
-                     const fullName = `${row.DayTag.toUpperCase()} - ${row.Esercizio}`;
-                     if (log.athlete_notes.includes(`[${fullName}]`)) {
-                         historyMap[idx] = log.athlete_notes.replace(`[${fullName}]`, '').trim();
-                     } else if (log.athlete_notes.includes(`[${row.Esercizio}]`)) { 
-                         historyMap[idx] = log.athlete_notes.replace(`[${row.Esercizio}]`, '').trim();
+                     // Cerchiamo match flessibile
+                     const exName = row.Esercizio.trim();
+                     if (log.athlete_notes.toLowerCase().includes(exName.toLowerCase())) {
+                         const cleanNote = log.athlete_notes.replace(/\[.*?\]/, '').trim(); // Rimuove il tag [Nome]
+                         historyMap[idx] = cleanNote;
                      }
                  });
             });
@@ -144,7 +169,7 @@ export default function LiveSheetViewer() {
     const noteText = exerciseNotes[index];
     if (!noteText?.trim()) return;
 
-    const fullName = `${item.DayTag.toUpperCase()} - ${item.Esercizio}`;
+    const fullName = `${item.DayTag} - ${item.Esercizio}`;
     const contentToSave = `[${fullName}] ${noteText}`;
 
     const { error } = await supabase.from('workout_logs').insert([{ 
@@ -223,10 +248,9 @@ export default function LiveSheetViewer() {
                       {!thumbnail && item.Video && (<a href={item.Video} target="_blank" className="text-blue-500 bg-blue-50 p-2 rounded-full hover:bg-blue-100"><ArrowRight size={18} /></a>)}
                     </div>
                     
-                    <div className="grid grid-cols-3 gap-2 text-center mb-3">
-                      <div className="bg-slate-50 p-2 rounded-lg border border-slate-100"><span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider">Serie</span><span className="font-bold text-slate-700 text-lg">{item.Serie}</span></div>
-                      <div className="bg-slate-50 p-2 rounded-lg border border-slate-100"><span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider">Reps</span><span className="font-bold text-slate-700 text-lg">{item.Reps}</span></div>
-                      <div className="bg-slate-50 p-2 rounded-lg border border-slate-100"><span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider">Rec</span><span className="font-bold text-slate-700 text-lg">{item.Recupero || '60s'}</span></div>
+                    <div className="grid grid-cols-2 gap-2 text-center mb-3">
+                      <div className="bg-slate-50 p-2 rounded-lg border border-slate-100"><span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider">Protocollo</span><span className="font-bold text-slate-700 text-lg">{item.Serie}</span></div>
+                      <div className="bg-slate-50 p-2 rounded-lg border border-slate-100"><span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider">Rec</span><span className="font-bold text-slate-700 text-lg">{item.Recupero || '-'}</span></div>
                     </div>
                     {item.Note && <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm text-slate-600 italic"><span className="font-bold text-slate-400 text-[10px] uppercase block mb-1">Tip Coach:</span>{item.Note}</div>}
                   </div>
