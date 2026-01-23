@@ -69,7 +69,8 @@ export default function LiveSheetViewer() {
       if (!sheetId) return;
       
       try {
-        const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+        // Usiamo il nostro ponte interno per evitare l'errore CORS
+        const csvUrl = `/api/sheet?id=${sheetId}`;
         
         const res = await fetch(csvUrl);
         if (!res.ok) throw new Error("Impossibile caricare. Assicurati che il foglio sia Pubblicato sul Web (File > Condividi > Pubblica sul Web).");
