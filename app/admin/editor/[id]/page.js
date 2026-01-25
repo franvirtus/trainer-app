@@ -25,11 +25,9 @@ export default function EditorPage() {
   }, [id]);
 
   const loadData = async () => {
-    // 1. Carica info scheda
     const { data: prog } = await supabase.from('programs').select('*').eq('id', id).single();
     if (prog) setProgram(prog);
 
-    // 2. Carica esercizi esistenti
     const { data: ex } = await supabase.from('exercises').select('*').eq('program_id', id).order('created_at', { ascending: true });
     if (ex) setExercises(ex);
   };
@@ -53,27 +51,32 @@ export default function EditorPage() {
   const saveAll = async () => {
     setSaving(true);
     
-    // 1. Cancelliamo i vecchi esercizi (metodo semplice per evitare conflitti)
+    // 1. Cancelliamo i vecchi per riscriverli
     await supabase.from('exercises').delete().eq('program_id', id);
 
-    // 2. Prepariamo i nuovi dati
+    // 2. Prepariamo i dati (SENZA LE NOTE per evitare il crash)
     const exercisesToSave = exercises.map(ex => ({
         program_id: id,
         name: ex.name,
         sets: ex.sets,
         reps: ex.reps,
-        weight: ex.weight,
-        notes: ex.notes
+        weight: ex.weight
+        // notes: ex.notes  <-- RIMOSSO PERCHÉ MANCA LA COLONNA NEL DB
     }));
 
-    // 3. Salviamo tutto
+    // 3. Salviamo
     if (exercisesToSave.length > 0) {
         const { error } = await supabase.from('exercises').insert(exercisesToSave);
-        if (error) alert("Errore salvataggio: " + error.message);
+        if (error) {
+            alert("Errore salvataggio: " + error.message);
+        } else {
+            alert("Scheda salvata con successo! ✅");
+        }
+    } else {
+         alert("Scheda salvata (nessun esercizio) ✅");
     }
     
     setSaving(false);
-    alert("Scheda salvata con successo! ✅");
   };
 
   if (!program) return <div className="p-10 text-center">Caricamento editor...</div>;
@@ -86,7 +89,7 @@ export default function EditorPage() {
             <ArrowLeft size={18}/> Torna all'Atleta
         </button>
 
-        {/* HEADER FISSO */}
+        {/* HEADER */}
         <div className="flex justify-between items-center mb-8 sticky top-2 bg-slate-50 py-4 z-10">
             <div>
                 <h1 className="text-2xl font-bold text-slate-800">Modifica Scheda</h1>
@@ -97,7 +100,7 @@ export default function EditorPage() {
             </button>
         </div>
 
-        {/* LISTA ESERCIZI */}
+        {/* LISTA */}
         <div className="space-y-4">
             {exercises.map((ex, index) => (
                 <div key={index} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex gap-4 items-start group hover:border-blue-300 transition">
@@ -131,9 +134,11 @@ export default function EditorPage() {
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Carico (Kg)</label>
                                 <input type="text" value={ex.weight} onChange={(e) => updateExercise(index, 'weight', e.target.value)} className="w-full bg-slate-50 p-2 rounded-lg font-bold text-center border border-slate-100 focus:border-blue-500 outline-none"/>
                             </div>
-                            <div className="flex-1">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Note</label>
-                                <input type="text" placeholder="Note tecniche..." value={ex.notes} onChange={(e) => updateExercise(index, 'notes', e.target.value)} className="w-full bg-slate-50 p-2 rounded-lg text-sm border border-slate-100 focus:border-blue-500 outline-none"/>
+                            
+                            {/* CAMPO NOTE (Visibile ma non salvato) */}
+                            <div className="flex-1 opacity-50">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Note (Disabilitate)</label>
+                                <input disabled type="text" placeholder="Non salvate nel DB" value={ex.notes} className="w-full bg-slate-100 p-2 rounded-lg text-sm border border-slate-100 outline-none text-slate-400 cursor-not-allowed"/>
                             </div>
                         </div>
                     </div>
@@ -141,7 +146,7 @@ export default function EditorPage() {
             ))}
         </div>
 
-        {/* BOTTONE AGGIUNGI */}
+        {/* ADD BUTTON */}
         <button onClick={addExercise} className="w-full mt-6 py-4 border-2 border-dashed border-slate-300 rounded-2xl text-slate-400 font-bold hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition flex justify-center items-center gap-2">
             <Plus size={24}/> AGGIUNGI ESERCIZIO
         </button>
