@@ -1,22 +1,30 @@
+export const dynamic = 'force-dynamic'; // <--- QUESTA RIGA BLOCCA L'ERRORE DI BUILD
 "use client";
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { Save, ArrowLeft, User, Mail, Phone, FileText } from 'lucide-react';
 import Link from 'next/link';
 
-// VERSIONE CORRETTA: createClient rimosso da qui per evitare errori Vercel
-
 export default function NewClientPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-
-  // INIZIALIZZIAMO SUPABASE QUI DENTRO (Così la build non si rompe)
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
   
+  // --- CONFIGURAZIONE SICURA SUPABASE ---
+  // Recuperiamo le variabili
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // Se durante la build mancano le chiavi, NON facciamo crashare tutto, ritorniamo null
+  if (!supabaseUrl || !supabaseKey) {
+    return <div className="p-10 text-center">Caricamento configurazione...</div>;
+  }
+
+  // Se siamo qui, le chiavi ci sono: creiamo il client
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  // --------------------------------------
+
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -37,7 +45,6 @@ export default function NewClientPage() {
         alert("Errore: " + error.message);
         setLoading(false);
     } else {
-        // Successo! Torna alla dashboard
         router.push('/admin'); 
     }
   };
@@ -66,7 +73,7 @@ export default function NewClientPage() {
                 />
             </div>
 
-            {/* CONTATTI (Affiancati) */}
+            {/* CONTATTI */}
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Mail size={12}/> Email</label>
