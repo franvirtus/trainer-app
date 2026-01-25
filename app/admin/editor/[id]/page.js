@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Plus, Trash2, GripVertical, Copy, Clock, Activity, Timer } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, GripVertical, Copy, ArrowRightCircle } from 'lucide-react';
 
 export default function EditorPage() {
   const params = useParams();
@@ -21,27 +21,43 @@ export default function EditorPage() {
   const [exercises, setExercises] = useState([]);
   const [saving, setSaving] = useState(false);
   
-  const [days, setDays] = useState(['Giorno A']); 
-  const [activeDay, setActiveDay] = useState('Giorno A'); 
+  const [activeDay, setActiveDay] = useState('Giorno A');
+  const [days, setDays] = useState(['Giorno A']);
 
   useEffect(() => {
     if (id) loadData();
   }, [id]);
 
   const loadData = async () => {
-    // 1. Carica info scheda
+    // 1. Carica Programma
     const { data: prog } = await supabase.from('programs').select('*').eq('id', id).single();
     if (prog) setProgram(prog);
 
-    // 2. Carica esercizi
+    // 2. Carica Esercizi
     const { data: ex } = await supabase.from('exercises').select('*').eq('program_id', id).order('created_at', { ascending: true });
     
     if (ex && ex.length > 0) {
-        setExercises(ex);
-        // Estrai i giorni unici presenti nel DB
-        const uniqueDays = [...new Set(ex.map(item => item.day || 'Giorno A'))];
-        // Ordiniamo i giorni alfabeticamente per evitare caos
-        uniqueDays.sort();
+        // Normalizziamo i dati: se 'progression' è vuoto, lo creiamo basandoci sui vecchi campi
+        const normalizedEx = ex.map(e => {
+            if (!e.progression || Object.keys(e.progression).length === 0) {
+                // Migrazione al volo dei vecchi dati
+                const defaultProg = {};
+                for(let i=1; i<=(prog?.duration || 4); i++) {
+                    defaultProg[i] = { 
+                        sets: e.sets || '', 
+                        reps: e.reps || '', 
+                        weight: e.weight || '',
+                        rpe: e.rpe || '',
+                        rest: e.rest || ''
+                    };
+                }
+                return { ...e, progression: defaultProg };
+            }
+            return e;
+        });
+        
+        setExercises(normalizedEx);
+        const uniqueDays = [...new Set(ex.map(item => item.day || 'Giorno A'))].sort();
         setDays(uniqueDays);
         setActiveDay(uniqueDays[0]);
     }
@@ -50,237 +66,178 @@ export default function EditorPage() {
   const currentExercises = exercises.filter(ex => (ex.day || 'Giorno A') === activeDay);
 
   const addExercise = () => {
+    // Crea una progressione vuota per tutte le settimane
+    const emptyProgression = {};
+    for(let i=1; i<=(program?.duration || 4); i++) {
+        emptyProgression[i] = { sets: '3', reps: '10', weight: '', rpe: '8', rest: '90"' };
+    }
+
     setExercises([...exercises, { 
-        name: '', sets: '3', reps: '10', weight: '', notes: '', rpe: '', rest: '90"', tempo: '',
+        name: '', 
+        progression: emptyProgression,
+        notes: '',
         day: activeDay,
         tempId: Date.now()
     }]);
   };
 
-  const updateExercise = (exerciseToUpdate, field, value) => {
-    const updatedList = exercises.map(ex => {
-        const isTarget = ex.id ? ex.id === exerciseToUpdate.id : ex.tempId === exerciseToUpdate.tempId;
-        if (isTarget) {
-            return { ...ex, [field]: value };
-        }
-        return ex;
-    });
-    setExercises(updatedList);
+  const updateExerciseName = (exToUpdate, val) => {
+      setExercises(exercises.map(e => (e === exToUpdate ? { ...e, name: val } : e)));
   };
 
-  const removeExercise = (exerciseToRemove) => {
-    const updatedList = exercises.filter(ex => ex !== exerciseToRemove);
-    setExercises(updatedList);
+  const updateProgression = (exToUpdate, week, field, val) => {
+      const updatedExercises = exercises.map(e => {
+          if (e === exToUpdate) {
+              const newProg = { ...e.progression };
+              if (!newProg[week]) newProg[week] = {};
+              newProg[week] = { ...newProg[week], [field]: val };
+              return { ...e, progression: newProg };
+          }
+          return e;
+      });
+      setExercises(updatedExercises);
   };
 
-  // --- GESTIONE GIORNI MIGLIORATA ---
+  // Funzione Magica: Copia la Settimana 1 su tutte le altre
+  const copyWeekOneToAll = (exToUpdate) => {
+      const week1Data = exToUpdate.progression['1'];
+      const newProg = {};
+      for(let i=1; i<=(program?.duration || 4); i++) {
+          newProg[i] = { ...week1Data };
+      }
+      setExercises(exercises.map(e => (e === exToUpdate ? { ...e, progression: newProg } : e)));
+  };
+
+  const removeExercise = (ex) => {
+      setExercises(exercises.filter(e => e !== ex));
+  };
+  
+  // GESTIONE GIORNI SEMPLIFICATA
   const addNewDay = () => {
-      if (days.length >= 7) return alert("Massimo 7 giorni (Giorno A-G).");
-      const nextChar = String.fromCharCode(65 + days.length); // A, B, C...
-      const newDayName = `Giorno ${nextChar}`;
-      setDays([...days, newDayName]);
-      setActiveDay(newDayName);
-  };
-
-  const deleteDay = (dayToDelete) => {
-      if (days.length <= 1) return alert("Devi avere almeno un giorno.");
-      if (!confirm(`Sei sicuro di voler eliminare il ${dayToDelete} e tutti i suoi esercizi?`)) return;
-
-      // Rimuovi esercizi di quel giorno
-      const cleanExercises = exercises.filter(ex => ex.day !== dayToDelete);
-      setExercises(cleanExercises);
-
-      // Rimuovi il giorno dalla lista
-      const newDays = days.filter(d => d !== dayToDelete);
-      setDays(newDays);
-      
-      // Se stavi guardando quel giorno, spostati sul primo disponibile
-      if (activeDay === dayToDelete) setActiveDay(newDays[0]);
-  };
-
-  const duplicateDay = () => {
-      if (days.length >= 7) return alert("Massimo 7 giorni raggiunti.");
-      if(!confirm(`Vuoi duplicare tutti gli esercizi del ${activeDay}?`)) return;
-      
-      const nextChar = String.fromCharCode(65 + days.length);
-      const newDayName = `Giorno ${nextChar}`;
-      
-      const exercisesToCopy = currentExercises.map(ex => ({
-          ...ex,
-          id: undefined, // Reset ID
-          tempId: Date.now() + Math.random(),
-          day: newDayName // Assegna al nuovo giorno
-      }));
-
-      setExercises([...exercises, ...exercisesToCopy]);
-      setDays([...days, newDayName]);
-      setActiveDay(newDayName);
+    if (days.length >= 7) return;
+    const nextChar = String.fromCharCode(65 + days.length);
+    const newDay = `Giorno ${nextChar}`;
+    setDays([...days, newDay]);
+    setActiveDay(newDay);
   };
 
   const saveAll = async () => {
     setSaving(true);
-    
-    // Cancellazione e riscrittura (Metodo sicuro per mantenere coerenza)
+    // Cancelliamo i vecchi per pulizia
     await supabase.from('exercises').delete().eq('program_id', id);
 
-    const cleanExercises = exercises.map(ex => ({
+    const toSave = exercises.map(ex => ({
         program_id: id,
         name: ex.name,
-        sets: ex.sets,
-        reps: ex.reps,
-        weight: ex.weight,
         notes: ex.notes,
-        rpe: ex.rpe,    // NUOVO
-        rest: ex.rest,  // NUOVO
-        tempo: ex.tempo,// NUOVO
-        day: ex.day || 'Giorno A'
+        day: ex.day || 'Giorno A',
+        progression: ex.progression, // SALVIAMO IL JSON COMPLETO
+        // Salviamo anche i campi flat per compatibilità/ricerca, prendendo la week 1 come riferimento
+        sets: ex.progression['1']?.sets || '',
+        reps: ex.progression['1']?.reps || '',
+        weight: ex.progression['1']?.weight || '',
     }));
 
-    if (cleanExercises.length > 0) {
-        const { error } = await supabase.from('exercises').insert(cleanExercises);
+    if (toSave.length > 0) {
+        const { error } = await supabase.from('exercises').insert(toSave);
         if (error) alert("Errore: " + error.message);
-        else alert("Scheda salvata con successo! ✅");
-    } else {
-        alert("Scheda salvata (vuota).");
+        else alert("Salvato! ✅");
     }
     setSaving(false);
-    loadData(); // Ricarica per avere gli ID corretti
+    loadData();
   };
 
   if (!program) return <div className="p-10 text-center">Caricamento...</div>;
+  const weeks = Array.from({length: program.duration}, (_, i) => i + 1);
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 font-sans pb-40">
-      <div className="max-w-6xl mx-auto"> {/* Allargato container per più colonne */}
-        
-        {/* HEADER */}
-        <div className="flex justify-between items-center mb-6 sticky top-0 bg-slate-50/95 backdrop-blur py-4 z-20 border-b border-slate-200">
-            <div className="flex items-center gap-4">
-                <button onClick={() => router.back()} className="p-2 hover:bg-slate-200 rounded-full"><ArrowLeft size={20}/></button>
-                <div>
-                    <h1 className="text-xl font-bold text-slate-800">{program.title}</h1>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider">Editor Scheda</p>
-                </div>
-            </div>
-            <button onClick={saveAll} disabled={saving} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow hover:scale-105 transition">
-                <Save size={18}/> {saving ? "..." : "Salva"}
-            </button>
-        </div>
+    <div className="min-h-screen bg-slate-50 p-4 font-sans pb-40">
+      {/* HEADER */}
+      <div className="max-w-[95%] mx-auto flex justify-between items-center mb-6 sticky top-2 bg-white/90 backdrop-blur p-4 rounded-xl shadow-sm z-50 border border-slate-200">
+          <div className="flex items-center gap-4">
+              <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-full"><ArrowLeft size={20}/></button>
+              <div>
+                  <h1 className="text-xl font-bold text-slate-800">{program.title}</h1>
+                  <p className="text-xs text-slate-500 font-bold uppercase">{program.duration} SETTIMANE • {activeDay}</p>
+              </div>
+          </div>
+          <button onClick={saveAll} disabled={saving} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow hover:bg-black transition">
+              <Save size={18}/> {saving ? "..." : "SALVA"}
+          </button>
+      </div>
 
-        {/* BARRA DEI GIORNI (TABS con Delete) */}
-        <div className="flex gap-2 overflow-x-auto pb-4 mb-4 items-center">
+      <div className="max-w-[95%] mx-auto">
+        {/* TABS GIORNI */}
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
             {days.map(day => (
-                <div key={day} className="relative group">
-                    <button 
-                        onClick={() => setActiveDay(day)}
-                        className={`px-5 py-2 pr-8 rounded-lg font-bold text-sm whitespace-nowrap transition-all ${
-                            activeDay === day 
-                            ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-200' 
-                            : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
-                        }`}
-                    >
-                        {day}
-                    </button>
-                    {/* Tasto X per cancellare */}
-                    {days.length > 1 && (
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); deleteDay(day); }}
-                            className={`absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-red-500 hover:text-white transition ${
-                                activeDay === day ? 'text-blue-300' : 'text-slate-300'
-                            }`}
-                        >
-                            <Trash2 size={12}/>
-                        </button>
-                    )}
-                </div>
-            ))}
-            
-            {days.length < 7 && (
-                <button onClick={addNewDay} className="px-4 py-2 rounded-lg border-2 border-dashed border-slate-300 text-slate-400 hover:border-blue-400 hover:text-blue-500 transition flex items-center gap-1">
-                    <Plus size={16}/> Giorno
+                <button key={day} onClick={() => setActiveDay(day)} className={`px-6 py-3 rounded-xl font-bold text-sm transition shadow-sm ${activeDay === day ? 'bg-blue-600 text-white ring-2 ring-blue-200' : 'bg-white text-slate-500 hover:bg-slate-100'}`}>
+                    {day}
                 </button>
-            )}
+            ))}
+            {days.length < 7 && <button onClick={addNewDay} className="px-4 py-2 rounded-xl border-2 border-dashed border-slate-300 text-slate-400 hover:border-blue-500 hover:text-blue-600"><Plus/></button>}
         </div>
 
-        {/* TOOLBAR */}
-        <div className="flex justify-between items-center mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100">
-            <h2 className="text-lg font-bold text-blue-800">{activeDay}</h2>
-            <button onClick={duplicateDay} className="text-xs font-bold text-blue-600 bg-white px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-600 hover:text-white transition flex items-center gap-2">
-                <Copy size={14}/> Duplica Giorno
-            </button>
-        </div>
-
-        {/* LISTA ESERCIZI (Nuovo Layout a Colonne) */}
-        <div className="space-y-3">
-            {currentExercises.length === 0 && (
-                <div className="text-center py-10 opacity-50">Nessun esercizio nel {activeDay}</div>
-            )}
-
-            {currentExercises.map((ex, index) => (
-                <div key={index} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4 items-start group hover:border-blue-400 transition">
-                    <div className="mt-3 text-slate-300 hidden md:block"><GripVertical size={20}/></div>
-                    
-                    <div className="flex-1 w-full grid gap-4">
-                        {/* Riga 1: Nome e Note */}
-                        <div className="flex gap-3 items-center">
+        {/* LISTA ESERCIZI - MATRIX VIEW */}
+        <div className="space-y-8">
+            {currentExercises.map((ex, idx) => (
+                <div key={idx} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    {/* INTESTAZIONE ESERCIZIO */}
+                    <div className="bg-slate-50 p-4 border-b border-slate-100 flex items-center gap-4">
+                        <GripVertical className="text-slate-300 cursor-move"/>
+                        <div className="flex-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Nome Esercizio</label>
                             <input 
                                 type="text" 
-                                placeholder="Nome Esercizio (es. Panca Piana)" 
-                                className="flex-1 font-bold text-lg text-slate-800 outline-none placeholder:text-slate-300 bg-transparent"
+                                className="w-full text-lg font-bold bg-transparent outline-none placeholder:text-slate-300"
+                                placeholder="Es. Squat Back"
                                 value={ex.name}
-                                onChange={(e) => updateExercise(ex, 'name', e.target.value)}
+                                onChange={(e) => updateExerciseName(ex, e.target.value)}
                             />
-                            <button onClick={() => removeExercise(ex)} className="text-slate-300 hover:text-red-500 p-2"><Trash2 size={18}/></button>
                         </div>
+                        <button onClick={() => copyWeekOneToAll(ex)} className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 hover:bg-blue-100 flex items-center gap-1" title="Copia Settimana 1 su tutte">
+                            <Copy size={12}/> Copia W1 su tutte
+                        </button>
+                        <button onClick={() => removeExercise(ex)} className="text-slate-300 hover:text-red-500 p-2"><Trash2 size={18}/></button>
+                    </div>
 
-                        {/* Riga 2: Parametri Tecnici (GRID COMPATTA) */}
-                        <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Serie</label>
-                                <input type="text" value={ex.sets} onChange={(e) => updateExercise(ex, 'sets', e.target.value)} className="w-full bg-transparent font-bold text-slate-700 outline-none text-center"/>
-                            </div>
-                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Reps</label>
-                                <input type="text" value={ex.reps} onChange={(e) => updateExercise(ex, 'reps', e.target.value)} className="w-full bg-transparent font-bold text-slate-700 outline-none text-center"/>
-                            </div>
-                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Carico (Kg)</label>
-                                <input type="text" value={ex.weight} onChange={(e) => updateExercise(ex, 'weight', e.target.value)} className="w-full bg-transparent font-bold text-slate-700 outline-none text-center"/>
-                            </div>
-                            
-                            {/* COLONNE PRO */}
-                            <div className="bg-blue-50/50 p-2 rounded-lg border border-blue-100">
-                                <label className="text-[9px] font-bold text-blue-400 uppercase block mb-1 flex items-center gap-1"><Activity size={8}/> RPE</label>
-                                <input type="text" placeholder="es. 8" value={ex.rpe} onChange={(e) => updateExercise(ex, 'rpe', e.target.value)} className="w-full bg-transparent font-bold text-blue-700 outline-none text-center"/>
-                            </div>
-                            <div className="bg-blue-50/50 p-2 rounded-lg border border-blue-100">
-                                <label className="text-[9px] font-bold text-blue-400 uppercase block mb-1 flex items-center gap-1"><Clock size={8}/> REC (Sec)</label>
-                                <input type="text" placeholder='90"' value={ex.rest} onChange={(e) => updateExercise(ex, 'rest', e.target.value)} className="w-full bg-transparent font-bold text-blue-700 outline-none text-center"/>
-                            </div>
-                            <div className="bg-blue-50/50 p-2 rounded-lg border border-blue-100">
-                                <label className="text-[9px] font-bold text-blue-400 uppercase block mb-1 flex items-center gap-1"><Timer size={8}/> TEMPO</label>
-                                <input type="text" placeholder="3-0-1-0" value={ex.tempo} onChange={(e) => updateExercise(ex, 'tempo', e.target.value)} className="w-full bg-transparent font-bold text-blue-700 outline-none text-center"/>
-                            </div>
-                        </div>
-
-                        {/* Riga 3: Note */}
-                        <input 
-                            type="text" 
-                            placeholder="Note tecniche o esecutive..." 
-                            value={ex.notes} 
-                            onChange={(e) => updateExercise(ex, 'notes', e.target.value)} 
-                            className="w-full bg-transparent text-xs text-slate-500 border-b border-transparent focus:border-slate-300 outline-none pb-1"
-                        />
+                    {/* LA MATRICE (Scrollabile orizzontalmente se ci sono tante settimane) */}
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-slate-400 uppercase bg-slate-50/50">
+                                <tr>
+                                    <th className="px-4 py-2 min-w-[80px]">Week</th>
+                                    <th className="px-2 py-2 w-20">Sets</th>
+                                    <th className="px-2 py-2 w-20">Reps</th>
+                                    <th className="px-2 py-2 w-24">Carico</th>
+                                    <th className="px-2 py-2 w-20">RPE</th>
+                                    <th className="px-2 py-2 w-20">Rest</th>
+                                    <th className="px-4 py-2 min-w-[150px]">Note specifiche</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {weeks.map(week => (
+                                    <tr key={week} className="hover:bg-slate-50/50 transition">
+                                        <td className="px-4 py-3 font-bold text-slate-500 bg-slate-50/30">
+                                            W{week}
+                                        </td>
+                                        <td className="px-2"><input type="text" className="w-full font-bold text-center bg-transparent outline-none border-b border-transparent focus:border-blue-500" value={ex.progression?.[week]?.sets || ''} onChange={(e) => updateProgression(ex, week, 'sets', e.target.value)}/></td>
+                                        <td className="px-2"><input type="text" className="w-full font-bold text-center bg-transparent outline-none border-b border-transparent focus:border-blue-500" value={ex.progression?.[week]?.reps || ''} onChange={(e) => updateProgression(ex, week, 'reps', e.target.value)}/></td>
+                                        <td className="px-2"><input type="text" className="w-full font-bold text-center bg-transparent outline-none border-b border-transparent focus:border-blue-500" value={ex.progression?.[week]?.weight || ''} onChange={(e) => updateProgression(ex, week, 'weight', e.target.value)}/></td>
+                                        <td className="px-2"><input type="text" className="w-full font-bold text-center text-blue-600 bg-transparent outline-none border-b border-transparent focus:border-blue-500" value={ex.progression?.[week]?.rpe || ''} onChange={(e) => updateProgression(ex, week, 'rpe', e.target.value)}/></td>
+                                        <td className="px-2"><input type="text" className="w-full font-bold text-center text-slate-500 bg-transparent outline-none border-b border-transparent focus:border-blue-500" value={ex.progression?.[week]?.rest || ''} onChange={(e) => updateProgression(ex, week, 'rest', e.target.value)}/></td>
+                                        <td className="px-4"><input type="text" className="w-full text-slate-500 bg-transparent outline-none" placeholder="..." value={ex.progression?.[week]?.note || ''} onChange={(e) => updateProgression(ex, week, 'note', e.target.value)}/></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             ))}
         </div>
 
-        {/* FAB ADD BUTTON */}
         <button onClick={addExercise} className="fixed bottom-8 right-8 bg-blue-600 text-white p-4 rounded-full shadow-xl hover:bg-blue-700 hover:scale-110 transition z-50">
             <Plus size={28}/>
         </button>
-
       </div>
     </div>
   );
