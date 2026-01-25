@@ -1,7 +1,7 @@
-export const dynamic = 'force-dynamic'; // <--- QUESTA RIGA BLOCCA L'ERRORE DI BUILD
 "use client";
+export const dynamic = 'force-dynamic'; // Ora è al posto giusto!
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { Save, ArrowLeft, User, Mail, Phone, FileText } from 'lucide-react';
@@ -12,16 +12,14 @@ export default function NewClientPage() {
   const [loading, setLoading] = useState(false);
   
   // --- CONFIGURAZIONE SICURA SUPABASE ---
-  // Recuperiamo le variabili
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Se durante la build mancano le chiavi, NON facciamo crashare tutto, ritorniamo null
+  // Se mancano le chiavi (es. durante la build), mostriamo un caricamento finto
   if (!supabaseUrl || !supabaseKey) {
-    return <div className="p-10 text-center">Caricamento configurazione...</div>;
+    return null; // Ritorna null per non rompere la build
   }
 
-  // Se siamo qui, le chiavi ci sono: creiamo il client
   const supabase = createClient(supabaseUrl, supabaseKey);
   // --------------------------------------
 
