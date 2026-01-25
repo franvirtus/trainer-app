@@ -5,13 +5,13 @@ import { useRouter } from 'next/navigation';
 import { Save, ArrowLeft, User, Mail, Phone, FileText } from 'lucide-react';
 import Link from 'next/link';
 
-// NOTA: Ho tolto createClient da qui per evitare l'errore di build su Vercel.
+// VERSIONE CORRETTA: createClient rimosso da qui per evitare errori Vercel
 
 export default function NewClientPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
-  // 1. INIZIALIZZIAMO SUPABASE QUI DENTRO (Al sicuro)
+  // INIZIALIZZIAMO SUPABASE QUI DENTRO (Così la build non si rompe)
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
