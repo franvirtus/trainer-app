@@ -1,17 +1,27 @@
 "use client";
+// 1. Forza la modalità dinamica per evitare errori di build
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { UserPlus, Users, ChevronRight, Mail } from 'lucide-react'; // Ho tolto 'Phone' che causava l'errore
+import { UserPlus, Users, ChevronRight, Mail } from 'lucide-react';
 import Link from 'next/link';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
 
 export default function HomePage() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // 2. INIZIALIZZIAMO SUPABASE QUI DENTRO (AL SICURO)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // Se mancano le chiavi durante la build, non facciamo nulla (evita il crash)
+  if (!supabaseUrl || !supabaseKey) {
+    return null; 
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  // ----------------------------------------------------
 
   useEffect(() => {
     fetchClients();
@@ -57,7 +67,7 @@ export default function HomePage() {
                   <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center hover:border-blue-300 hover:shadow-md transition cursor-pointer group">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg uppercase">
-                        {client.full_name.charAt(0)}
+                        {client.full_name ? client.full_name.charAt(0) : "?"}
                       </div>
                       <div>
                         <h3 className="font-bold text-lg text-slate-800 group-hover:text-blue-600 transition">{client.full_name}</h3>
@@ -80,5 +90,3 @@ export default function HomePage() {
     </div>
   );
 }
-
-// fix deploy vercel
