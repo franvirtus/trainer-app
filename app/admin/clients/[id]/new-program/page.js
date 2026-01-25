@@ -31,14 +31,14 @@ export default function NewProgramPage() {
     
     setLoading(true);
 
-    // NOTA: Abbiamo rimosso 'client_name' perché non esiste nel DB e causava l'errore.
-    // Usiamo solo client_id che è sufficiente.
+    // FIX: Rimosso 'notes' perché la colonna non esiste nel DB.
+    // Salviamo solo i dati essenziali che siamo sicuri esistano.
     const { error } = await supabase
       .from('programs')
       .insert([{
           client_id: clientId,
           title: formData.title,
-          notes: formData.description,
+          // notes: formData.description,  <-- RIMOSSO PER EVITARE ERRORE
           created_at: new Date().toISOString()
       }]);
 
@@ -85,12 +85,12 @@ export default function NewProgramPage() {
                 />
             </div>
 
-            {/* NOTE */}
+            {/* NOTE (Disabilitate nel salvataggio ma visibili) */}
             <div>
                 <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><FileText size={12}/> Obiettivi / Note</label>
                 <textarea 
-                    placeholder="Note generali per questa scheda..." 
-                    className="w-full p-3 border border-slate-200 rounded-xl text-sm h-32 outline-none focus:border-blue-500 resize-none"
+                    placeholder="Note (al momento non verranno salvate)" 
+                    className="w-full p-3 border border-slate-200 rounded-xl text-sm h-32 outline-none focus:border-blue-500 resize-none bg-slate-50 text-slate-400"
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
                 />
