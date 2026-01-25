@@ -1,29 +1,30 @@
 "use client";
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Calendar, Dumbbell, Trash2 } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { ArrowLeft, Plus, Calendar, Dumbbell, Trash2, Mail, Phone } from 'lucide-react';
 import Link from 'next/link';
 
-export default function ClientDetailPage({ params }) {
-  const { id } = use(params); // Recuperiamo l'ID dell'atleta dall'URL
-  const router = useRouter();
+export default function ClientDetailPage() {
+  const params = useParams(); // Recupera l'ID dall'URL in modo sicuro
+  const id = params?.id; 
   
+  const router = useRouter();
   const [client, setClient] = useState(null);
   const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // --- CHIAVI DIRETTE (Fix per Vercel) ---
+  // --- CHIAVI DIRETTE ---
   const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
   const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
   
   const supabase = createClient(supabaseUrl, supabaseKey);
-  // ---------------------------------------
+  // ---------------------
 
   useEffect(() => {
-    fetchData();
+    if (id) fetchData();
   }, [id]);
 
   const fetchData = async () => {
@@ -35,9 +36,8 @@ export default function ClientDetailPage({ params }) {
       .single();
 
     if (clientError) {
-        alert("Errore caricamento atleta");
-        console.error(clientError);
-        return;
+        console.error("Errore atleta:", clientError);
+        return; // Non blocchiamo tutto, magari l'atleta esiste ma c'è un problema di rete
     }
     setClient(clientData);
 
@@ -65,6 +65,7 @@ export default function ClientDetailPage({ params }) {
   };
 
   if (loading) return <div className="p-10 text-center text-slate-400">Caricamento profilo...</div>;
+  if (!client) return <div className="p-10 text-center text-red-500">Atleta non trovato.</div>;
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 font-sans">
@@ -79,9 +80,9 @@ export default function ClientDetailPage({ params }) {
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 mb-8 flex justify-between items-center">
             <div>
                 <h1 className="text-3xl font-bold text-slate-800">{client.full_name}</h1>
-                <div className="text-slate-500 mt-1 flex gap-4 text-sm">
-                    {client.email && <span>{client.email}</span>}
-                    {client.phone && <span>{client.phone}</span>}
+                <div className="text-slate-500 mt-2 flex flex-col gap-1 text-sm">
+                    {client.email && <span className="flex items-center gap-2"><Mail size={14}/> {client.email}</span>}
+                    {client.phone && <span className="flex items-center gap-2"><Phone size={14}/> {client.phone}</span>}
                 </div>
             </div>
             <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-2xl font-bold uppercase">
