@@ -1,5 +1,5 @@
 "use client";
-export const dynamic = 'force-dynamic'; // Ora è al posto giusto!
+export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
@@ -11,17 +11,12 @@ export default function NewClientPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   
-  // --- CONFIGURAZIONE SICURA SUPABASE ---
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  // Se mancano le chiavi (es. durante la build), mostriamo un caricamento finto
-  if (!supabaseUrl || !supabaseKey) {
-    return null; // Ritorna null per non rompere la build
-  }
+  // --- CHIAVI DIRETTE (Fix per Vercel) ---
+  const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
+  const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
 
   const supabase = createClient(supabaseUrl, supabaseKey);
-  // --------------------------------------
+  // ---------------------------------------
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -58,8 +53,6 @@ export default function NewClientPage() {
         <h1 className="text-2xl font-bold text-slate-800 mb-6">Nuova Anagrafica Atleta</h1>
 
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-5">
-            
-            {/* NOME E COGNOME */}
             <div>
                 <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><User size={12}/> Nome Completo *</label>
                 <input 
@@ -71,7 +64,6 @@ export default function NewClientPage() {
                 />
             </div>
 
-            {/* CONTATTI */}
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Mail size={12}/> Email</label>
@@ -95,7 +87,6 @@ export default function NewClientPage() {
                 </div>
             </div>
 
-            {/* NOTE */}
             <div>
                 <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><FileText size={12}/> Note Iniziali</label>
                 <textarea 
@@ -113,7 +104,6 @@ export default function NewClientPage() {
             >
                 {loading ? "Salvataggio..." : <><Save size={20}/> CREA ATLETA</>}
             </button>
-
         </div>
       </div>
     </div>

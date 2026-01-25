@@ -8,26 +8,18 @@ export default function DashboardView() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // --- CONFIGURAZIONE SICURA SUPABASE ---
-  // Recuperiamo le variabili
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  // Se mancano le chiavi (durante la build), ritorniamo null per non rompere tutto
-  if (!supabaseUrl || !supabaseKey) {
-    return null;
-  }
+  // --- CHIAVI DIRETTE (Fix per Vercel) ---
+  const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
+  const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
   
-  // Creiamo il client SOLO se le chiavi esistono
   const supabase = createClient(supabaseUrl, supabaseKey);
-  // --------------------------------------
+  // ---------------------------------------
 
   useEffect(() => {
     fetchClients();
   }, []);
 
   const fetchClients = async () => {
-    // Scarica i clienti ordinati per data di creazione
     const { data, error } = await supabase
       .from('clients')
       .select('*')
@@ -41,7 +33,6 @@ export default function DashboardView() {
   return (
     <div className="min-h-screen bg-slate-50 p-6 font-sans">
       <div className="max-w-4xl mx-auto">
-        {/* HEADER */}
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-2xl font-bold text-slate-800">I Miei Atleti</h1>
@@ -67,7 +58,6 @@ export default function DashboardView() {
               <Link key={client.id} href={`/admin/clients/${client.id}`}>
                   <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center hover:border-blue-300 hover:shadow-md transition cursor-pointer group">
                     <div className="flex items-center gap-4">
-                      {/* Avatar con iniziali */}
                       <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg">
                         {client.full_name ? client.full_name.charAt(0).toUpperCase() : "?"}
                       </div>
