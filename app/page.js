@@ -15,10 +15,18 @@ export default function HomePage() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Se mancano le chiavi durante la build, non facciamo nulla (evita il crash)
-  if (!supabaseUrl || !supabaseKey) {
-    return null; 
-  }
+if (!supabaseUrl || !supabaseKey) {
+  return (
+    <div className="flex items-center justify-center h-screen bg-red-50">
+      <div className="p-6 bg-white rounded shadow-xl border border-red-200 text-center">
+        <h1 className="text-xl font-bold text-red-600 mb-2">ERRORE CRITICO</h1>
+        <p className="text-slate-700">Le Variabili d'Ambiente mancano su Vercel!</p>
+        <p className="text-xs text-slate-400 mt-4">URL: {supabaseUrl ? 'OK' : 'MANCANTE'}</p>
+        <p className="text-xs text-slate-400">KEY: {supabaseKey ? 'OK' : 'MANCANTE'}</p>
+      </div>
+    </div>
+  );
+}
 
   const supabase = createClient(supabaseUrl, supabaseKey);
   // ----------------------------------------------------
