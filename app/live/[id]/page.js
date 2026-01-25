@@ -1,105 +1,68 @@
+"use client";
 export const dynamic = 'force-dynamic';
+
+import { useState, useEffect, use } from 'react'; // Aggiunto 'use'
 import { createClient } from '@supabase/supabase-js';
-import LiveClient from './LiveClient';
+import { Dumbbell, Calendar, Clock, CheckCircle } from 'lucide-react';
 
-// NOTA: Ho rimosso la creazione di supabase da qui (globale) perché causava l'errore in build.
-// La facciamo avvenire dentro la funzione getProgramData.
+export default function LivePage({ params }) {
+  const { id } = use(params); // Sboxing corretto dei params
+  const [program, setProgram] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-// Questa funzione gira sul server: velocissima e sicura
-async function getProgramData(programId) {
+  // --- CHIAVI DIRETTE ---
+  const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
+  const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
   
-  // 1. INIZIALIZZIAMO SUPABASE QUI DENTRO (Così non rompe la build)
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  
-  // Controllo di sicurezza: se mancano le chiavi, evitiamo il crash brutale
-  if (!supabaseUrl || !supabaseKey) {
-      return { error: "Errore configurazione server: mancano le chiavi Supabase." };
-  }
-
   const supabase = createClient(supabaseUrl, supabaseKey);
+  // ---------------------
 
-  // 2. Scarica i dettagli della scheda (Nome atleta, titolo)
-  const { data: program, error: progError } = await supabase
-    .from('programs')
-    .select('*')
-    .eq('id', programId)
-    .single();
+  useEffect(() => {
+    fetchProgram();
+  }, [id]);
 
-  if (progError || !program) return { error: "Scheda non trovata o ID errato." };
+  const fetchProgram = async () => {
+    const { data, error } = await supabase
+      .from('programs')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-  // 3. Scarica gli esercizi ordinati
-  const { data: exercises, error: exError } = await supabase
-    .from('exercises')
-    .select('*')
-    .eq('program_id', programId)
-    .order('order_index', { ascending: true });
+    if (error) console.error("Errore:", error);
+    if (data) setProgram(data);
+    setLoading(false);
+  };
 
-  if (exError) return { error: "Errore caricamento esercizi." };
-
-  return { program, exercises };
-}
-
-// Funzione che trasforma i dati del DB nel formato che piace al nostro Client
-function transformData(exercises) {
-    const groups = {};
-    const allWeeks = new Set();
-
-    exercises.forEach(ex => {
-        if (!groups[ex.day_tag]) {
-            groups[ex.day_tag] = [];
-        }
-
-        // Raccogliamo i nomi delle settimane presenti nel JSON (es. "Week 1", "Week 2")
-        if (ex.weekly_data) {
-            Object.keys(ex.weekly_data).forEach(w => allWeeks.add(w));
-        }
-
-        groups[ex.day_tag].push({
-            DayTag: ex.day_tag,
-            Esercizio: ex.name,
-            Video: ex.video_url || "",
-            Note: ex.notes || "",
-            Weeks: ex.weekly_data || {} // Qui c'è il JSON {"Week 1": "..."}
-        });
-    });
-
-    // Ordiniamo le settimane (Week 1, Week 2...)
-    const sortedWeeks = Array.from(allWeeks).sort((a, b) => {
-        // Logica per ordinare numeri dentro stringhe ("Week 1" prima di "Week 10")
-        return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
-    });
-
-    return { groups, weeks: sortedWeeks };
-}
-
-export default async function LivePage({ params }) {
-  // Await params in Next.js 15+ (o versioni recenti di 14) è buona norma, 
-  // anche se qui params arriva già pronto, lo trattiamo in modo sicuro.
-  const { id } = await params; 
-
-  const { program, exercises, error } = await getProgramData(id);
-
-  if (error) {
-    return (
-        <div className="min-h-screen flex items-center justify-center p-10 bg-slate-50 text-red-600 font-bold">
-            ⚠️ {error}
-        </div>
-    );
-  }
-
-  // Trasformiamo i dati per il visualizzatore
-  const { groups, weeks } = transformData(exercises);
-
-  // Se non ci sono settimane definite, mettiamo un default
-  const availableWeeks = weeks.length > 0 ? weeks : ["Standard"];
+  if (loading) return <div className="p-10 text-center text-white bg-slate-900 min-h-screen">Caricamento scheda...</div>;
+  if (!program) return <div className="p-10 text-center text-red-400 bg-slate-900 min-h-screen">Scheda non trovata.</div>;
 
   return (
-    <LiveClient 
-        initialData={groups} 
-        sheetId={id} // Usiamo l'ID Supabase come riferimento per i log
-        clientName={program.client_name} 
-        availableWeeks={availableWeeks} 
-    />
+    <div className="min-h-screen bg-slate-900 text-slate-100 font-sans p-4">
+      <div className="max-w-md mx-auto">
+        {/* Intestazione */}
+        <div className="mb-8 pt-4">
+            <h1 className="text-3xl font-bold text-white mb-2">{program.title}</h1>
+            <div className="flex items-center gap-4 text-slate-400 text-sm">
+                <span className="flex items-center gap-1"><Calendar size={14}/> {new Date(program.created_at).toLocaleDateString('it-IT')}</span>
+                <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full font-bold">LIVE</span>
+            </div>
+        </div>
+
+        {/* Note del Coach */}
+        {program.notes && (
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6">
+                <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Note del Coach</h3>
+                <p className="text-slate-300 text-sm leading-relaxed">{program.notes}</p>
+            </div>
+        )}
+
+        {/* Placeholder Esercizi (Per ora vuoto) */}
+        <div className="text-center py-12 border-2 border-dashed border-slate-700 rounded-2xl text-slate-500">
+            <Dumbbell size={48} className="mx-auto mb-4 opacity-50"/>
+            <p>Nessun esercizio inserito.</p>
+        </div>
+
+      </div>
+    </div>
   );
 }

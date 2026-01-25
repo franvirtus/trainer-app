@@ -4,13 +4,12 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Calendar, Dumbbell, Trash2, Mail, Phone } from 'lucide-react';
+import { ArrowLeft, Plus, Calendar, Dumbbell, Trash2, Mail, Phone, Edit3 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ClientDetailPage() {
-  const params = useParams(); // Recupera l'ID dall'URL in modo sicuro
+  const params = useParams();
   const id = params?.id; 
-  
   const router = useRouter();
   const [client, setClient] = useState(null);
   const [programs, setPrograms] = useState([]);
@@ -19,7 +18,6 @@ export default function ClientDetailPage() {
   // --- CHIAVI DIRETTE ---
   const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
   const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
-  
   const supabase = createClient(supabaseUrl, supabaseKey);
   // ---------------------
 
@@ -28,40 +26,18 @@ export default function ClientDetailPage() {
   }, [id]);
 
   const fetchData = async () => {
-    // 1. Scarica dati atleta
-    const { data: clientData, error: clientError } = await supabase
-      .from('clients')
-      .select('*')
-      .eq('id', id)
-      .single();
+    const { data: clientData } = await supabase.from('clients').select('*').eq('id', id).single();
+    if (clientData) setClient(clientData);
 
-    if (clientError) {
-        console.error("Errore atleta:", clientError);
-        return; // Non blocchiamo tutto, magari l'atleta esiste ma c'è un problema di rete
-    }
-    setClient(clientData);
-
-    // 2. Scarica le schede (programs) di questo atleta
-    const { data: progData, error: progError } = await supabase
-      .from('programs')
-      .select('*')
-      .eq('client_id', id)
-      .order('created_at', { ascending: false });
-
+    const { data: progData } = await supabase.from('programs').select('*').eq('client_id', id).order('created_at', { ascending: false });
     if (progData) setPrograms(progData);
     setLoading(false);
   };
 
   const deleteProgram = async (programId) => {
       if(!confirm("Sei sicuro di voler eliminare questa scheda?")) return;
-
-      const { error } = await supabase
-          .from('programs')
-          .delete()
-          .eq('id', programId);
-      
-      if(error) alert("Errore cancellazione");
-      else fetchData(); // Ricarica la lista
+      const { error } = await supabase.from('programs').delete().eq('id', programId);
+      if(!error) fetchData(); 
   };
 
   if (loading) return <div className="p-10 text-center text-slate-400">Caricamento profilo...</div>;
@@ -71,12 +47,10 @@ export default function ClientDetailPage() {
     <div className="min-h-screen bg-slate-50 p-6 font-sans">
       <div className="max-w-4xl mx-auto">
         
-        {/* Tasto Indietro */}
         <Link href="/admin" className="flex items-center text-slate-500 mb-6 hover:text-blue-600 gap-2 font-bold text-sm">
             <ArrowLeft size={18}/> Torna alla Dashboard
         </Link>
 
-        {/* Intestazione Atleta */}
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 mb-8 flex justify-between items-center">
             <div>
                 <h1 className="text-3xl font-bold text-slate-800">{client.full_name}</h1>
@@ -90,19 +64,15 @@ export default function ClientDetailPage() {
             </div>
         </div>
 
-        {/* Sezione Schede */}
         <div className="flex justify-between items-end mb-6">
             <h2 className="text-xl font-bold text-slate-700 flex items-center gap-2">
                 <Dumbbell size={24} className="text-blue-600"/> Schede di Allenamento
             </h2>
-            
-            {/* Bottone per creare NUOVA SCHEDA */}
             <Link href={`/admin/clients/${id}/new-program`} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 shadow-lg hover:shadow-blue-200 transition">
                 <Plus size={20}/> Nuova Scheda
             </Link>
         </div>
 
-        {/* Lista Schede */}
         {programs.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-300 text-slate-400">
                 <p>Nessuna scheda presente.</p>
@@ -111,15 +81,22 @@ export default function ClientDetailPage() {
         ) : (
             <div className="grid gap-4">
                 {programs.map(program => (
-                    <div key={program.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center hover:shadow-md transition">
-                        <div>
-                            <h3 className="text-lg font-bold text-slate-800">{program.title}</h3>
-                            <p className="text-slate-400 text-sm flex items-center gap-1 mt-1">
-                                <Calendar size={14}/> Creata il: {new Date(program.created_at).toLocaleDateString('it-IT')}
-                            </p>
-                        </div>
+                    <div key={program.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center hover:shadow-md transition group">
+                        
+                        {/* LINK CHE PORTA ALL'EDITOR DEGLI ESERCIZI */}
+                        <Link href={`/admin/editor/${program.id}`} className="flex-1 cursor-pointer">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-600 transition flex items-center gap-2">
+                                    {program.title} <Edit3 size={14} className="opacity-0 group-hover:opacity-100 text-blue-500"/>
+                                </h3>
+                                <p className="text-slate-400 text-sm flex items-center gap-1 mt-1">
+                                    <Calendar size={14}/> Creata il: {new Date(program.created_at).toLocaleDateString('it-IT')}
+                                </p>
+                            </div>
+                        </Link>
+
                         <div className="flex items-center gap-3">
-                            <Link href={`/live/${program.id}`} target="_blank" className="text-blue-600 font-bold text-sm bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition">
+                            <Link href={`/live/${program.id}`} target="_blank" className="text-blue-600 font-bold text-xs uppercase bg-blue-50 px-3 py-2 rounded-lg hover:bg-blue-100 transition">
                                 Apri Live
                             </Link>
                             <button onClick={() => deleteProgram(program.id)} className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg transition">
