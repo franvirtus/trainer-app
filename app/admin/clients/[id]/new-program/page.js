@@ -5,12 +5,11 @@ import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter, useParams } from 'next/navigation';
 import { Save, ArrowLeft, Dumbbell, FileText, Calendar } from 'lucide-react';
-import Link from 'next/link';
 
 export default function NewProgramPage() {
   const router = useRouter();
   const params = useParams();
-  const clientId = params?.id; // L'ID dell'atleta preso dall'URL
+  const clientId = params?.id; 
 
   const [loading, setLoading] = useState(false);
   
@@ -24,7 +23,7 @@ export default function NewProgramPage() {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    start_date: new Date().toISOString().split('T')[0] // Oggi come default
+    start_date: new Date().toISOString().split('T')[0]
   });
 
   const saveProgram = async () => {
@@ -32,16 +31,12 @@ export default function NewProgramPage() {
     
     setLoading(true);
 
-    // 1. Recuperiamo il nome dell'atleta per sicurezza (opzionale, ma utile nel DB)
-    const { data: client } = await supabase.from('clients').select('full_name').eq('id', clientId).single();
-    const clientName = client ? client.full_name : 'Atleta';
-
-    // 2. Creiamo la scheda
+    // NOTA: Abbiamo rimosso 'client_name' perché non esiste nel DB e causava l'errore.
+    // Usiamo solo client_id che è sufficiente.
     const { error } = await supabase
       .from('programs')
       .insert([{
           client_id: clientId,
-          client_name: clientName,
           title: formData.title,
           notes: formData.description,
           created_at: new Date().toISOString()
@@ -51,7 +46,6 @@ export default function NewProgramPage() {
         alert("Errore: " + error.message);
         setLoading(false);
     } else {
-        // Successo! Torniamo al profilo dell'atleta
         router.push(`/admin/clients/${clientId}`); 
     }
   };
@@ -80,7 +74,7 @@ export default function NewProgramPage() {
                 />
             </div>
 
-            {/* DATA (Opzionale, solo visiva) */}
+            {/* DATA */}
             <div>
                 <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Calendar size={12}/> Data Inizio</label>
                 <input 
@@ -91,7 +85,7 @@ export default function NewProgramPage() {
                 />
             </div>
 
-            {/* NOTE / OBIETTIVI */}
+            {/* NOTE */}
             <div>
                 <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><FileText size={12}/> Obiettivi / Note</label>
                 <textarea 
