@@ -1,105 +1,128 @@
 "use client";
-import { useState, useEffect } from 'react';
+export const dynamic = 'force-dynamic';
+
+import { useState, useEffect, use } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { ArrowLeft, Plus, Calendar, Archive, PlayCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Plus, Calendar, Dumbbell, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
-
-export default function ClientProfilePage() {
-  const params = useParams(); // Prende l'ID dall'URL
-  const clientId = params.id;
-
+export default function ClientDetailPage({ params }) {
+  const { id } = use(params); // Recuperiamo l'ID dell'atleta dall'URL
+  const router = useRouter();
+  
   const [client, setClient] = useState(null);
   const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // --- CHIAVI DIRETTE (Fix per Vercel) ---
+  const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
+  const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
+  
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  // ---------------------------------------
+
   useEffect(() => {
-    const fetchData = async () => {
-        // 1. Scarica dati cliente
-        const { data: clientData } = await supabase.from('clients').select('*').eq('id', clientId).single();
-        setClient(clientData);
-
-        // 2. Scarica le schede di QUESTO cliente
-        if (clientData) {
-            const { data: progData } = await supabase
-                .from('programs')
-                .select('*')
-                .eq('client_id', clientId)
-                .order('created_at', { ascending: false });
-            setPrograms(progData || []);
-        }
-        setLoading(false);
-    };
     fetchData();
-  }, [clientId]);
+  }, [id]);
 
-  if (loading) return <div className="p-10 text-center">Caricamento profilo...</div>;
-  if (!client) return <div className="p-10 text-center text-red-500">Cliente non trovato</div>;
+  const fetchData = async () => {
+    // 1. Scarica dati atleta
+    const { data: clientData, error: clientError } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (clientError) {
+        alert("Errore caricamento atleta");
+        console.error(clientError);
+        return;
+    }
+    setClient(clientData);
+
+    // 2. Scarica le schede (programs) di questo atleta
+    const { data: progData, error: progError } = await supabase
+      .from('programs')
+      .select('*')
+      .eq('client_id', id)
+      .order('created_at', { ascending: false });
+
+    if (progData) setPrograms(progData);
+    setLoading(false);
+  };
+
+  const deleteProgram = async (programId) => {
+      if(!confirm("Sei sicuro di voler eliminare questa scheda?")) return;
+
+      const { error } = await supabase
+          .from('programs')
+          .delete()
+          .eq('id', programId);
+      
+      if(error) alert("Errore cancellazione");
+      else fetchData(); // Ricarica la lista
+  };
+
+  if (loading) return <div className="p-10 text-center text-slate-400">Caricamento profilo...</div>;
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 font-sans">
       <div className="max-w-4xl mx-auto">
         
-        {/* NAVIGAZIONE */}
+        {/* Tasto Indietro */}
         <Link href="/admin" className="flex items-center text-slate-500 mb-6 hover:text-blue-600 gap-2 font-bold text-sm">
-            <ArrowLeft size={16}/> Torna alla Dashboard
+            <ArrowLeft size={18}/> Torna alla Dashboard
         </Link>
 
-        {/* HEADER PROFILO */}
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 mb-8">
-            <div className="flex justify-between items-start">
-                <div>
-                    <h1 className="text-3xl font-bold text-slate-800 mb-2">{client.full_name}</h1>
-                    <p className="text-slate-500">{client.notes || "Nessuna nota particolare"}</p>
-                </div>
-                <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                    {client.is_active ? "Cliente Attivo" : "Archiviato"}
+        {/* Intestazione Atleta */}
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 mb-8 flex justify-between items-center">
+            <div>
+                <h1 className="text-3xl font-bold text-slate-800">{client.full_name}</h1>
+                <div className="text-slate-500 mt-1 flex gap-4 text-sm">
+                    {client.email && <span>{client.email}</span>}
+                    {client.phone && <span>{client.phone}</span>}
                 </div>
             </div>
-            
-            <div className="mt-6 flex gap-4">
-                {/* Questo bottone in futuro porterà al nuovo editor collegato al cliente */}
-                <button className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 shadow-lg hover:scale-105 transition">
-                    <Plus size={20} /> Nuova Scheda
-                </button>
+            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-2xl font-bold uppercase">
+                {client.full_name.charAt(0)}
             </div>
         </div>
 
-        {/* LISTA SCHEDE */}
-        <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <Calendar className="text-blue-600"/> Programmi di Allenamento
-        </h2>
+        {/* Sezione Schede */}
+        <div className="flex justify-between items-end mb-6">
+            <h2 className="text-xl font-bold text-slate-700 flex items-center gap-2">
+                <Dumbbell size={24} className="text-blue-600"/> Schede di Allenamento
+            </h2>
+            
+            {/* Bottone per creare NUOVA SCHEDA */}
+            <Link href={`/admin/clients/${id}/new-program`} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 shadow-lg hover:shadow-blue-200 transition">
+                <Plus size={20}/> Nuova Scheda
+            </Link>
+        </div>
 
+        {/* Lista Schede */}
         {programs.length === 0 ? (
-            <div className="bg-slate-100 rounded-xl p-8 text-center text-slate-500 border border-slate-200 border-dashed">
-                Questo atleta non ha ancora nessuna scheda. <br/>Clicca "Nuova Scheda" per iniziare.
+            <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-300 text-slate-400">
+                <p>Nessuna scheda presente.</p>
+                <p className="text-sm">Clicca su "Nuova Scheda" per crearne una.</p>
             </div>
         ) : (
-            <div className="space-y-4">
-                {programs.map(prog => (
-                    <div key={prog.id} className={`p-5 rounded-xl border flex justify-between items-center transition ${prog.is_archived ? 'bg-slate-100 border-slate-200 opacity-70' : 'bg-white border-slate-200 shadow-sm hover:border-blue-400'}`}>
+            <div className="grid gap-4">
+                {programs.map(program => (
+                    <div key={program.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center hover:shadow-md transition">
                         <div>
-                            <div className="flex items-center gap-2 mb-1">
-                                <h3 className="font-bold text-lg text-slate-800">{prog.title}</h3>
-                                {prog.is_archived && <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded uppercase font-bold">Archiviata</span>}
-                            </div>
-                            <p className="text-xs text-slate-400 flex items-center gap-4">
-                                <span>Durata: {prog.duration_weeks} settimane</span>
-                                <span>Creata il: {new Date(prog.created_at).toLocaleDateString('it-IT')}</span>
+                            <h3 className="text-lg font-bold text-slate-800">{program.title}</h3>
+                            <p className="text-slate-400 text-sm flex items-center gap-1 mt-1">
+                                <Calendar size={14}/> Creata il: {new Date(program.created_at).toLocaleDateString('it-IT')}
                             </p>
                         </div>
-                        
                         <div className="flex items-center gap-3">
-                            <Link href={`/live/${prog.id}`} target="_blank" className="flex items-center gap-1 text-sm font-bold text-blue-600 bg-blue-50 px-3 py-2 rounded-lg hover:bg-blue-100">
-                                <PlayCircle size={16}/> Vedi Live
+                            <Link href={`/live/${program.id}`} target="_blank" className="text-blue-600 font-bold text-sm bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition">
+                                Apri Live
                             </Link>
-                            <button className="p-2 text-slate-400 hover:text-slate-600" title="Archivia/Modifica">
-                                <Archive size={18}/>
+                            <button onClick={() => deleteProgram(program.id)} className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg transition">
+                                <Trash2 size={18}/>
                             </button>
                         </div>
                     </div>
