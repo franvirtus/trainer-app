@@ -2,15 +2,24 @@ export const dynamic = 'force-dynamic';
 import { createClient } from '@supabase/supabase-js';
 import LiveClient from './LiveClient';
 
-// Inizializza Supabase lato server (usa le tue credenziali vere qui o variabili d'ambiente)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// NOTA: Ho rimosso la creazione di supabase da qui (globale) perché causava l'errore in build.
+// La facciamo avvenire dentro la funzione getProgramData.
 
 // Questa funzione gira sul server: velocissima e sicura
 async function getProgramData(programId) {
   
-  // 1. Scarica i dettagli della scheda (Nome atleta, titolo)
+  // 1. INIZIALIZZIAMO SUPABASE QUI DENTRO (Così non rompe la build)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  // Controllo di sicurezza: se mancano le chiavi, evitiamo il crash brutale
+  if (!supabaseUrl || !supabaseKey) {
+      return { error: "Errore configurazione server: mancano le chiavi Supabase." };
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  // 2. Scarica i dettagli della scheda (Nome atleta, titolo)
   const { data: program, error: progError } = await supabase
     .from('programs')
     .select('*')
@@ -19,7 +28,7 @@ async function getProgramData(programId) {
 
   if (progError || !program) return { error: "Scheda non trovata o ID errato." };
 
-  // 2. Scarica gli esercizi ordinati
+  // 3. Scarica gli esercizi ordinati
   const { data: exercises, error: exError } = await supabase
     .from('exercises')
     .select('*')
@@ -65,7 +74,9 @@ function transformData(exercises) {
 }
 
 export default async function LivePage({ params }) {
-  const { id } = params; // Questo ora è l'ID di Supabase (UUID), non di Google
+  // Await params in Next.js 15+ (o versioni recenti di 14) è buona norma, 
+  // anche se qui params arriva già pronto, lo trattiamo in modo sicuro.
+  const { id } = await params; 
 
   const { program, exercises, error } = await getProgramData(id);
 
