@@ -4,14 +4,23 @@ import { createClient } from '@supabase/supabase-js';
 import { UserPlus, Users, ChevronRight, Phone, Mail } from 'lucide-react';
 import Link from 'next/link';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
-
 export default function DashboardView() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // --- CONFIGURAZIONE SICURA SUPABASE ---
+  // Recuperiamo le variabili
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // Se mancano le chiavi (durante la build), ritorniamo null per non rompere tutto
+  if (!supabaseUrl || !supabaseKey) {
+    return null;
+  }
+  
+  // Creiamo il client SOLO se le chiavi esistono
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  // --------------------------------------
 
   useEffect(() => {
     fetchClients();
@@ -38,11 +47,10 @@ export default function DashboardView() {
             <h1 className="text-2xl font-bold text-slate-800">I Miei Atleti</h1>
             <p className="text-slate-500">Gestisci i profili e le loro schede</p>
           </div>
-        // Sostituisci il vecchio <button> con questo:
-            <Link href="/admin/new-client" className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-700 transition shadow-lg">
-                <UserPlus size={20} /> Nuovo Atleta
-            </Link>
-          </button>
+        
+          <Link href="/admin/new-client" className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-700 transition shadow-lg">
+              <UserPlus size={20} /> Nuovo Atleta
+          </Link>
         </div>
 
         {loading ? (
@@ -61,7 +69,7 @@ export default function DashboardView() {
                     <div className="flex items-center gap-4">
                       {/* Avatar con iniziali */}
                       <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg">
-                        {client.full_name.charAt(0).toUpperCase()}
+                        {client.full_name ? client.full_name.charAt(0).toUpperCase() : "?"}
                       </div>
                       <div>
                         <h3 className="font-bold text-lg text-slate-800 group-hover:text-blue-600 transition">{client.full_name}</h3>
