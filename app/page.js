@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { UserPlus, Users, ChevronRight, Mail } from 'lucide-react';
+import { UserPlus, Users, ChevronRight, Mail } from 'lucide-react'; // Ho tolto 'Phone' che causava l'errore
 import Link from 'next/link';
 
 const supabase = createClient(
