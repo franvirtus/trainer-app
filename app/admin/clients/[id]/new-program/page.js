@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter, useParams } from 'next/navigation';
-import { Save, ArrowLeft, Dumbbell, FileText, Calendar } from 'lucide-react';
+import { Save, ArrowLeft, Dumbbell, Calendar, Clock } from 'lucide-react';
 
 export default function NewProgramPage() {
   const router = useRouter();
@@ -16,29 +16,28 @@ export default function NewProgramPage() {
   // --- CHIAVI DIRETTE ---
   const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
   const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
-  
   const supabase = createClient(supabaseUrl, supabaseKey);
   // ---------------------
 
   const [formData, setFormData] = useState({
     title: '',
-    description: '',
-    start_date: new Date().toISOString().split('T')[0]
+    duration: 4, // Default 4 settimane
+    description: ''
   });
 
   const saveProgram = async () => {
     if (!formData.title.trim()) return alert("Dai un titolo alla scheda!");
+    if (formData.duration < 1) return alert("La durata minima è 1 settimana!");
     
     setLoading(true);
 
-    // FIX: Rimosso 'notes' perché la colonna non esiste nel DB.
-    // Salviamo solo i dati essenziali che siamo sicuri esistano.
     const { error } = await supabase
       .from('programs')
       .insert([{
           client_id: clientId,
           title: formData.title,
-          // notes: formData.description,  <-- RIMOSSO PER EVITARE ERRORE
+          duration: parseInt(formData.duration), // Salviamo la durata!
+          notes: formData.description,
           created_at: new Date().toISOString()
       }]);
 
@@ -58,39 +57,46 @@ export default function NewProgramPage() {
             <ArrowLeft size={18}/> Annulla
         </button>
 
-        <h1 className="text-2xl font-bold text-slate-800 mb-6">Nuova Scheda Allenamento</h1>
+        <h1 className="text-2xl font-bold text-slate-800 mb-6">Imposta Nuova Scheda</h1>
 
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-5">
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
             
-            {/* TITOLO SCHEDA */}
+            {/* TITOLO */}
             <div>
-                <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Dumbbell size={12}/> Titolo Scheda *</label>
+                <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Dumbbell size={12}/> Nome Mesociclo *</label>
                 <input 
                     type="text" 
-                    placeholder="Es. Forza Mesociclo 1" 
+                    placeholder="Es. Ipertrofia Phase 1" 
                     className="w-full p-3 border border-slate-200 rounded-xl font-bold text-lg focus:ring-2 focus:ring-blue-500 outline-none"
                     value={formData.title}
                     onChange={(e) => setFormData({...formData, title: e.target.value})}
                 />
             </div>
 
-            {/* DATA */}
+            {/* DURATA (La parte nuova che volevi) */}
             <div>
-                <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Calendar size={12}/> Data Inizio</label>
-                <input 
-                    type="date" 
-                    className="w-full p-3 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500"
-                    value={formData.start_date}
-                    onChange={(e) => setFormData({...formData, start_date: e.target.value})}
-                />
+                <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Clock size={12}/> Durata (Settimane) *</label>
+                <div className="flex items-center gap-4">
+                    <input 
+                        type="range" 
+                        min="1" max="12" 
+                        className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                        value={formData.duration}
+                        onChange={(e) => setFormData({...formData, duration: e.target.value})}
+                    />
+                    <div className="w-16 h-12 flex items-center justify-center bg-blue-50 text-blue-700 font-bold text-xl rounded-xl border border-blue-100">
+                        {formData.duration}
+                    </div>
+                </div>
+                <p className="text-xs text-slate-400 mt-2">Questa scheda durerà {formData.duration} settimane.</p>
             </div>
 
-            {/* NOTE (Disabilitate nel salvataggio ma visibili) */}
+            {/* NOTE */}
             <div>
-                <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><FileText size={12}/> Obiettivi / Note</label>
+                <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Calendar size={12}/> Obiettivi / Note</label>
                 <textarea 
-                    placeholder="Note (al momento non verranno salvate)" 
-                    className="w-full p-3 border border-slate-200 rounded-xl text-sm h-32 outline-none focus:border-blue-500 resize-none bg-slate-50 text-slate-400"
+                    placeholder="Note generali..." 
+                    className="w-full p-3 border border-slate-200 rounded-xl text-sm h-24 outline-none focus:border-blue-500 resize-none"
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
                 />
@@ -101,7 +107,7 @@ export default function NewProgramPage() {
                 disabled={loading}
                 className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 hover:scale-[1.02] transition-all flex justify-center items-center gap-2 disabled:opacity-50"
             >
-                {loading ? "Creazione in corso..." : <><Save size={20}/> CREA SCHEDA</>}
+                {loading ? "Creazione..." : <><Save size={20}/> CREA STRUTTURA</>}
             </button>
 
         </div>
