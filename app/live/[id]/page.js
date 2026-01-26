@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, use } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Dumbbell, Calendar, Info, Clock, Activity, Check, Circle, MessageSquare, Target } from 'lucide-react';
+import { Dumbbell, Calendar, Info, Clock, Activity, Check, Circle, MessageSquare, Target, History } from 'lucide-react';
 
 export default function LivePage({ params }) {
   const { id } = use(params);
@@ -15,13 +15,13 @@ export default function LivePage({ params }) {
   const [program, setProgram] = useState(null);
   const [exercises, setExercises] = useState([]);
   const [logs, setLogs] = useState({}); 
+  const [historyLogs, setHistoryLogs] = useState({}); // LOG SETTIMANA PRECEDENTE
   const [loading, setLoading] = useState(true);
 
   const [activeWeek, setActiveWeek] = useState(1);
   const [activeDay, setActiveDay] = useState('');
   const [availableDays, setAvailableDays] = useState([]);
 
-  // INPUT STATE
   const [inputs, setInputs] = useState({});
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export default function LivePage({ params }) {
         setAvailableDays(uniqueDays);
         if (!activeDay) setActiveDay(uniqueDays[0]);
 
-        // 3. Carica Log Esistenti
+        // 3. CARICA LOG ATTUALI (Settimana corrente)
         const { data: savedLogs } = await supabase.from('workout_logs')
             .select('*')
             .eq('program_id', id)
@@ -58,12 +58,31 @@ export default function LivePage({ params }) {
                 inputsMap[key] = {
                     reps: log.actual_reps,
                     weight: log.actual_weight,
-                    notes: log.athlete_notes // Recuperiamo le note atleta!
+                    notes: log.athlete_notes 
                 };
             });
         }
         setLogs(logsMap);
         setInputs(prev => ({...prev, ...inputsMap}));
+
+        // 4. CARICA STORICO (Settimana Precedente)
+        if (activeWeek > 1) {
+            const { data: history } = await supabase.from('workout_logs')
+                .select('*')
+                .eq('program_id', id)
+                .eq('week_number', activeWeek - 1);
+            
+            const hMap = {};
+            if (history) {
+                history.forEach(h => {
+                     const key = `${h.exercise_name}_${h.day_label}`;
+                     hMap[key] = h;
+                });
+            }
+            setHistoryLogs(hMap);
+        } else {
+            setHistoryLogs({}); // Reset se siamo alla week 1
+        }
     }
     setLoading(false);
   };
@@ -82,6 +101,18 @@ export default function LivePage({ params }) {
       const userIn = inputs[key] || {};
 
       if (!isCompleted) {
+          // --- VALIDAZIONE ---
+          // 1. Controllo che ci siano i numeri
+          if (!userIn.reps || !userIn.weight) {
+              alert("Inserisci Reps e Kg prima di salvare!");
+              return;
+          }
+          // 2. Controllo che siano > 0
+          if (parseFloat(userIn.reps) <= 0 || parseFloat(userIn.weight) <= 0) {
+              alert("Reps e Kg devono essere maggiori di 0!");
+              return;
+          }
+
           // SALVA
           const { error } = await supabase.from('workout_logs').insert([{
               program_id: id,
@@ -89,13 +120,14 @@ export default function LivePage({ params }) {
               week_number: activeWeek,
               day_label: activeDay,
               actual_sets: ex.progression[activeWeek]?.sets,
-              actual_reps: userIn.reps || ex.progression[activeWeek]?.reps,
-              actual_weight: userIn.weight || '',
-              athlete_notes: userIn.notes || '', // SALVIAMO LE NOTE
+              actual_reps: userIn.reps, 
+              actual_weight: userIn.weight,
+              athlete_notes: userIn.notes || '', 
               completed: true
           }]);
           
           if (!error) setLogs(prev => ({ ...prev, [key]: true }));
+          else alert("Errore salvataggio: " + error.message);
 
       } else {
           // CANCELLA (UNDO)
@@ -156,7 +188,7 @@ export default function LivePage({ params }) {
 
       <div className="max-w-md mx-auto p-4 space-y-6">
         
-        {/* 1. NOTE GENERALI SCHEDA (IN TESTA) */}
+        {/* INFO SCHEDA */}
         {program.notes && (
             <div className="bg-blue-900/20 border border-blue-800/50 p-4 rounded-xl flex gap-3">
                 <Info size={20} className="text-blue-400 shrink-0 mt-0.5"/>
@@ -172,44 +204,44 @@ export default function LivePage({ params }) {
             const key = `${ex.name}_${activeDay}`;
             const isDone = logs[key];
             const userIn = inputs[key] || {};
+            
+            // Dati storici (Settimana scorsa)
+            const history = historyLogs[key];
 
             return (
                 <div key={index} className={`rounded-2xl border transition-all ${isDone ? 'bg-green-900/10 border-green-800/30' : 'bg-slate-800 border-slate-700'}`}>
                     
-                    {/* TITOLO E TARGET */}
+                    {/* INTESTAZIONE */}
                     <div className="p-4 border-b border-slate-700/50">
-                        <div className="flex justify-between items-start mb-3">
+                        <div className="flex justify-between items-center mb-3">
                             <h3 className={`text-lg font-bold ${isDone ? 'text-green-400' : 'text-white'}`}>{ex.name}</h3>
-                            {/* TASTO CHECK */}
+                            
+                            {/* TASTO CHECK (SBAFFO) - Ora più grande e reattivo */}
                             <button 
                                 onClick={() => toggleComplete(ex)}
-                                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-lg ${
-                                    isDone ? 'bg-green-600 text-white hover:bg-red-500' : 'bg-slate-700 text-slate-500 hover:bg-blue-600 hover:text-white'
+                                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg active:scale-95 ${
+                                    isDone ? 'bg-green-600 text-white hover:bg-red-500' : 'bg-slate-700 text-slate-500 hover:bg-blue-600 hover:text-white ring-2 ring-slate-600 ring-offset-2 ring-offset-slate-800'
                                 }`}
                             >
-                                {isDone ? <Check size={20}/> : <Circle size={20}/>}
+                                {isDone ? <Check size={24}/> : <Circle size={24}/>}
                             </button>
                         </div>
 
-                        {/* INFO COACH (Target) */}
+                        {/* TARGET COACH */}
                         <div className="flex flex-wrap gap-2 text-xs font-bold text-slate-400">
                              <span className="bg-slate-900 px-2 py-1 rounded border border-slate-700 text-slate-300">
                                 {weekData.sets} x {weekData.reps}
                              </span>
-                             
-                             {/* 2. VISUALIZZAZIONE CARICO TARGET (PT) */}
                              {weekData.weight && (
                                  <span className="bg-slate-900 px-2 py-1 rounded border border-slate-700 text-yellow-500 flex items-center gap-1">
                                     <Target size={10}/> {weekData.weight} Kg
                                  </span>
                              )}
-                             
                              {weekData.rpe && (
                                  <span className="bg-slate-900 px-2 py-1 rounded border border-slate-700 text-orange-400 flex items-center gap-1">
                                     RPE {weekData.rpe}
                                  </span>
                              )}
-                             
                              {weekData.rest && (
                                  <span className="bg-slate-900 px-2 py-1 rounded border border-slate-700 text-blue-400 flex items-center gap-1">
                                     {weekData.rest} Rec
@@ -217,10 +249,25 @@ export default function LivePage({ params }) {
                              )}
                         </div>
 
-                        {/* NOTE DEL PT SULL'ESERCIZIO */}
+                        {/* NOTE DEL PT */}
                         {weekData.note && (
                             <div className="mt-3 text-sm text-slate-300 italic border-l-2 border-slate-600 pl-3">
                                 "{weekData.note}"
+                            </div>
+                        )}
+                        
+                        {/* STORICO SETTIMANA PRECEDENTE (Visibile se esiste) */}
+                        {history && !isDone && (
+                            <div className="mt-4 bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 flex flex-col gap-1">
+                                <div className="text-[10px] text-slate-500 uppercase font-bold flex items-center gap-1">
+                                    <History size={10}/> Settimana Scorsa (W{activeWeek - 1})
+                                </div>
+                                <div className="text-sm text-slate-300 font-mono">
+                                    {history.actual_sets} x <strong>{history.actual_reps}</strong> @ <strong>{history.actual_weight} Kg</strong>
+                                </div>
+                                {history.athlete_notes && (
+                                    <div className="text-xs text-slate-500 italic">"{history.athlete_notes}"</div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -234,9 +281,10 @@ export default function LivePage({ params }) {
                                         <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Reps Fatte</label>
                                         <input 
                                             type="number" 
+                                            min="1"
                                             placeholder={weekData.reps} 
                                             value={userIn.reps || ''}
-                                            className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white outline-none focus:border-blue-500 text-center font-bold"
+                                            className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white outline-none focus:border-blue-500 text-center font-bold text-lg"
                                             onChange={(e) => handleInputChange(ex.name, 'reps', e.target.value)}
                                         />
                                     </div>
@@ -244,19 +292,20 @@ export default function LivePage({ params }) {
                                         <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Kg Usati</label>
                                         <input 
                                             type="number" 
+                                            min="1"
                                             placeholder={weekData.weight || "Kg"} 
                                             value={userIn.weight || ''}
-                                            className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white outline-none focus:border-blue-500 text-center font-bold"
+                                            className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white outline-none focus:border-blue-500 text-center font-bold text-lg"
                                             onChange={(e) => handleInputChange(ex.name, 'weight', e.target.value)}
                                         />
                                     </div>
                                 </div>
                                 
-                                {/* 3. NOTE DELL'ATLETA */}
+                                {/* NOTE ATLETA */}
                                 <div>
                                     <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block flex items-center gap-1"><MessageSquare size={10}/> Le tue note</label>
                                     <textarea 
-                                        placeholder="Sensazioni, dolori, o note per il coach..." 
+                                        placeholder="Come è andata? Sensazioni..." 
                                         value={userIn.notes || ''}
                                         rows="2"
                                         className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-sm text-white outline-none focus:border-blue-500 resize-none"
@@ -267,17 +316,18 @@ export default function LivePage({ params }) {
                         ) : (
                             // RIEPILOGO STATICO (Cosa hai salvato)
                             <div className="space-y-2">
-                                <div className="flex gap-4 text-sm text-slate-300">
-                                    <span>Reps: <strong className="text-white">{userIn.reps || weekData.reps}</strong></span>
-                                    <span>Carico: <strong className="text-white">{userIn.weight || '-'}</strong> Kg</span>
+                                <div className="flex gap-4 text-sm text-slate-300 items-center bg-slate-950/30 p-2 rounded">
+                                    <span className="flex-1">Reps: <strong className="text-white text-lg">{userIn.reps || weekData.reps}</strong></span>
+                                    <span className="flex-1 text-right">Carico: <strong className="text-white text-lg">{userIn.weight || '-'}</strong> Kg</span>
                                 </div>
                                 {userIn.notes && (
                                     <div className="text-xs text-slate-400 bg-slate-800 p-2 rounded border border-slate-700">
-                                        Note: {userIn.notes}
+                                        <span className="block text-[9px] uppercase font-bold mb-1 opacity-50">Le tue note:</span>
+                                        {userIn.notes}
                                     </div>
                                 )}
-                                <div className="text-xs text-green-500 font-bold flex items-center gap-1 mt-2">
-                                    <CheckCircle size={12}/> Esercizio Completato
+                                <div className="text-xs text-green-500 font-bold flex items-center gap-1 mt-2 justify-end">
+                                    <Check size={12}/> Esercizio Completato
                                 </div>
                             </div>
                         )}
