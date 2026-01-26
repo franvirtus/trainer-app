@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, use } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Dumbbell, Info, Clock, Activity, Check, Plus, X, MessageSquare, History, Edit2, Trash2, User } from 'lucide-react';
+import { Dumbbell, Info, Clock, Activity, Check, Plus, X, MessageSquare, History, Edit2, Trash2 } from 'lucide-react';
 
 export default function LivePage({ params }) {
   const { id } = use(params);
@@ -233,7 +233,7 @@ export default function LivePage({ params }) {
                                 <span className="w-8"></span>
                             </div>
 
-                            {/* INPUT COMPATTI */}
+                            {/* INPUT COMPATTI E SENZA FRECCE */}
                             <div className="space-y-2 mb-4">
                                 {setLogsData.map((row, i) => (
                                     <div key={i} className="flex gap-2 items-center">
@@ -244,7 +244,7 @@ export default function LivePage({ params }) {
                                             placeholder={weekData.reps} 
                                             value={row.reps}
                                             onChange={(e) => updateRow(i, 'reps', e.target.value)}
-                                            className="flex-1 h-10 bg-slate-900 border border-slate-600 rounded-lg text-center text-white font-bold text-base outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-slate-700"
+                                            className="flex-1 h-9 bg-slate-900 border border-slate-600 rounded-lg text-center text-white font-bold text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-slate-700 [&::-webkit-inner-spin-button]:appearance-none"
                                         />
                                         
                                         <input 
@@ -252,11 +252,11 @@ export default function LivePage({ params }) {
                                             placeholder={weekData.weight || '-'}
                                             value={row.weight}
                                             onChange={(e) => updateRow(i, 'weight', e.target.value)}
-                                            className="flex-1 h-10 bg-slate-900 border border-slate-600 rounded-lg text-center text-white font-bold text-base outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-slate-700"
+                                            className="flex-1 h-9 bg-slate-900 border border-slate-600 rounded-lg text-center text-white font-bold text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-slate-700 [&::-webkit-inner-spin-button]:appearance-none"
                                         />
 
                                         {setLogsData.length > 1 && (
-                                            <button onClick={() => removeSetRow(i)} className="w-8 h-10 flex items-center justify-center text-slate-600 hover:text-red-400 transition">
+                                            <button onClick={() => removeSetRow(i)} className="w-8 h-9 flex items-center justify-center text-slate-600 hover:text-red-400 transition">
                                                 <Trash2 size={16}/>
                                             </button>
                                         )}
@@ -284,7 +284,7 @@ export default function LivePage({ params }) {
 
                             {/* TASTO SBAFFO DI COMPLETAMENTO */}
                             <button onClick={() => saveLog(ex)} className="w-full bg-green-600 text-white font-bold py-3 rounded-xl flex justify-center items-center gap-2 shadow-lg hover:bg-green-500 transition-all active:scale-95">
-                                <Check size={20}/> COMPLETA ESERCIZIO
+                                <Check size={20}/> SALVA
                             </button>
                         </div>
                     ) : (
