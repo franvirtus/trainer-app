@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, use } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Dumbbell, Info, Clock, Activity, Check, Plus, X, MessageSquare, History, Edit2, Trash2 } from 'lucide-react';
+import { Info, Check, Plus, X, History, Edit2, Trash2 } from 'lucide-react';
 
 export default function LivePage({ params }) {
   const { id } = use(params);
@@ -121,24 +121,24 @@ export default function LivePage({ params }) {
   };
 
   const saveLog = async (ex) => {
-      // --- VALIDAZIONE SEVERA ---
-      // Controlliamo ogni singola riga
+      // VALIDAZIONE: Blocca se 0 o vuoto
       for (let i = 0; i < setLogsData.length; i++) {
           const row = setLogsData[i];
           const r = parseFloat(row.reps);
           const w = parseFloat(row.weight);
-
-          // Se vuoto o <= 0
           if (!row.reps || r <= 0 || !row.weight || w <= 0) {
-              alert(`Errore alla Serie ${i + 1}: Inserisci Reps e Kg validi (maggiori di 0).`);
-              return; // Blocca tutto
+              alert(`Errore Set ${i + 1}: Inserisci valori validi (>0).`);
+              return;
           }
       }
 
       const key = `${ex.name}_${activeDay}`;
-      
       const repsString = setLogsData.map(r => r.reps).join('-');
       const weightString = setLogsData.map(r => r.weight).join('-');
+
+      // UPSERT LOGICA (Cancella e riscrivi per sicurezza o update)
+      // Qui facciamo delete + insert per semplicità di gestione array
+      await supabase.from('workout_logs').delete().eq('program_id', id).eq('week_number', activeWeek).eq('day_label', activeDay).eq('exercise_name', ex.name);
 
       const { error } = await supabase.from('workout_logs').insert([{
           program_id: id,
@@ -165,16 +165,6 @@ export default function LivePage({ params }) {
           closeEdit();
       } else {
           alert("Errore: " + error.message);
-      }
-  };
-
-  const deleteLog = async (ex) => {
-      const key = `${ex.name}_${activeDay}`;
-      const { error } = await supabase.from('workout_logs').delete().eq('program_id', id).eq('week_number', activeWeek).eq('day_label', activeDay).eq('exercise_name', ex.name);
-      if (!error) {
-          const oldData = logs[key];
-          setLogs(prev => { const n = { ...prev }; delete n[key]; return n; });
-          openEdit(ex.name, oldData);
       }
   };
 
@@ -247,26 +237,28 @@ export default function LivePage({ params }) {
                                 <span className="w-6"></span>
                             </div>
 
-                            {/* INPUT ULTRA-COMPATTI */}
+                            {/* INPUT ULTRA-COMPATTI E SENZA FRECCE */}
                             <div className="space-y-2 mb-4">
                                 {setLogsData.map((row, i) => (
                                     <div key={i} className="flex gap-2 items-center">
                                         <div className="w-6 text-slate-500 font-bold text-center text-xs">{i + 1}</div>
                                         
+                                        {/* REPS INPUT */}
                                         <input 
                                             type="number" 
                                             placeholder={weekData.reps} 
                                             value={row.reps}
                                             onChange={(e) => updateRow(i, 'reps', e.target.value)}
-                                            className="flex-1 h-8 bg-slate-900 border border-slate-600 rounded text-center text-white font-bold text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-700 [&::-webkit-inner-spin-button]:appearance-none"
+                                            className="flex-1 h-8 bg-slate-900 border border-slate-600 rounded text-center text-white font-bold text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                         />
                                         
+                                        {/* KG INPUT */}
                                         <input 
                                             type="number" 
                                             placeholder={weekData.weight || '-'}
                                             value={row.weight}
                                             onChange={(e) => updateRow(i, 'weight', e.target.value)}
-                                            className="flex-1 h-8 bg-slate-900 border border-slate-600 rounded text-center text-white font-bold text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-700 [&::-webkit-inner-spin-button]:appearance-none"
+                                            className="flex-1 h-8 bg-slate-900 border border-slate-600 rounded text-center text-white font-bold text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                         />
 
                                         {setLogsData.length > 1 && (
@@ -317,7 +309,7 @@ export default function LivePage({ params }) {
                                 {weekData.rest && <span className="text-blue-400 bg-slate-950 px-3 py-1.5 rounded border border-slate-800">{weekData.rest}</span>}
                             </div>
                             
-                            {/* NOTE PT (Con Etichetta) */}
+                            {/* NOTE PT */}
                             {weekData.note && (
                                 <div className="w-full bg-slate-900/50 p-3 rounded-lg border border-slate-800 mb-4 text-left">
                                     <span className="text-[10px] font-bold text-blue-400 uppercase block mb-1">Nota PT:</span>
@@ -360,14 +352,16 @@ export default function LivePage({ params }) {
                                 </div>
                             )}
 
-                            {/* BOTTONE + CENTRALE */}
+                            {/* BOTTONE PRINCIPALE: INSERISCI o MODIFICA */}
                             <button 
-                                onClick={() => isDone ? deleteLog(ex) : openEdit(ex.name, null)}
-                                className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all active:scale-95 gap-2 mt-auto ${
-                                    isDone ? 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-white' : 'bg-blue-600 text-white shadow-lg hover:bg-blue-500'
+                                onClick={() => openEdit(ex.name, logData)}
+                                className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all active:scale-95 gap-2 mt-auto shadow-lg ${
+                                    isDone 
+                                    ? 'bg-slate-700 border border-slate-600 text-white hover:bg-slate-600' // Stile Tasto Modifica
+                                    : 'bg-blue-600 text-white hover:bg-blue-500' // Stile Tasto Inserisci
                                 }`}
                             >
-                                {isDone ? <><Edit2 size={16}/> MODIFICA</> : <><Plus size={20}/> INSERISCI DATI</>}
+                                {isDone ? <><Edit2 size={16}/> MODIFICA DATI</> : <><Plus size={20}/> INSERISCI DATI</>}
                             </button>
                         </div>
                     )}
