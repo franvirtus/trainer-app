@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, use } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Dumbbell, Calendar, Info, Clock, Activity, Check, Circle, MessageSquare, Target, History } from 'lucide-react';
+import { Dumbbell, Calendar, Info, Clock, Activity, Check, Plus, X, MessageSquare, History, Edit2 } from 'lucide-react';
 
 export default function LivePage({ params }) {
   const { id } = use(params);
@@ -22,7 +22,9 @@ export default function LivePage({ params }) {
   const [activeDay, setActiveDay] = useState('');
   const [availableDays, setAvailableDays] = useState([]);
 
-  const [inputs, setInputs] = useState({});
+  // STATO PER GESTIRE I POP-UP (Quale esercizio sto modificando?)
+  const [editingId, setEditingId] = useState(null); // ID univoco dell'esercizio in modifica
+  const [tempInput, setTempInput] = useState({ reps: '', weight: '', notes: '' });
 
   useEffect(() => {
     fetchData();
@@ -40,28 +42,27 @@ export default function LivePage({ params }) {
         setAvailableDays(uniqueDays);
         if (!activeDay) setActiveDay(uniqueDays[0]);
 
+        // LOG ATTUALI
         const { data: savedLogs } = await supabase.from('workout_logs')
             .select('*')
             .eq('program_id', id)
             .eq('week_number', activeWeek);
         
         const logsMap = {};
-        const inputsMap = {};
         
         if (savedLogs) {
             savedLogs.forEach(log => {
                 const key = `${log.exercise_name}_${log.day_label}`; 
-                logsMap[key] = true; 
-                inputsMap[key] = {
+                logsMap[key] = {
                     reps: log.actual_reps,
                     weight: log.actual_weight,
-                    notes: log.athlete_notes 
+                    notes: log.athlete_notes
                 };
             });
         }
         setLogs(logsMap);
-        setInputs(prev => ({...prev, ...inputsMap}));
 
+        // STORICO (Settimana precedente)
         if (activeWeek > 1) {
             const { data: history } = await supabase.from('workout_logs')
                 .select('*')
@@ -83,47 +84,76 @@ export default function LivePage({ params }) {
     setLoading(false);
   };
 
-  const handleInputChange = (exName, field, value) => {
+  // APRE IL POP-UP
+  const openEdit = (exName, existingData) => {
       const key = `${exName}_${activeDay}`;
-      setInputs(prev => ({
-          ...prev,
-          [key]: { ...prev[key], [field]: value }
-      }));
+      setEditingId(key);
+      setTempInput({
+          reps: existingData?.reps || '',
+          weight: existingData?.weight || '',
+          notes: existingData?.notes || ''
+      });
   };
 
-  const toggleComplete = async (ex) => {
+  // CHIUDE IL POP-UP SENZA SALVARE
+  const closeEdit = () => {
+      setEditingId(null);
+      setTempInput({ reps: '', weight: '', notes: '' });
+  };
+
+  // SALVA (SBAFFO)
+  const saveLog = async (ex) => {
+      // Validazione Pigrizia: Se è tutto vuoto, salviamo comunque come "Fatto"
       const key = `${ex.name}_${activeDay}`;
-      const isCompleted = logs[key];
-      const userIn = inputs[key] || {};
 
-      if (!isCompleted) {
-          // NESSUNA VALIDAZIONE BLOCCANTE: Se è vuoto, salva vuoto (Pigrizia Mode attivata ✅)
+      const { error } = await supabase.from('workout_logs').insert([{
+          program_id: id,
+          exercise_name: ex.name,
+          week_number: activeWeek,
+          day_label: activeDay,
+          actual_sets: ex.progression[activeWeek]?.sets,
+          actual_reps: tempInput.reps,
+          actual_weight: tempInput.weight,
+          athlete_notes: tempInput.notes,
+          completed: true
+      }]);
 
-          const { error } = await supabase.from('workout_logs').insert([{
-              program_id: id,
-              exercise_name: ex.name,
-              week_number: activeWeek,
-              day_label: activeDay,
-              actual_sets: ex.progression[activeWeek]?.sets,
-              actual_reps: userIn.reps || '', // Salva stringa vuota se non c'è input
-              actual_weight: userIn.weight || '',
-              athlete_notes: userIn.notes || '', 
-              completed: true
-          }]);
-          
-          if (!error) setLogs(prev => ({ ...prev, [key]: true }));
-          else alert("Errore DB: " + error.message);
-
+      if (!error) {
+          // Aggiorna lo stato locale
+          setLogs(prev => ({ 
+              ...prev, 
+              [key]: { 
+                  reps: tempInput.reps, 
+                  weight: tempInput.weight, 
+                  notes: tempInput.notes 
+              } 
+          }));
+          closeEdit();
       } else {
-          // UNDO
-          const { error } = await supabase.from('workout_logs')
-              .delete()
-              .eq('program_id', id)
-              .eq('week_number', activeWeek)
-              .eq('day_label', activeDay)
-              .eq('exercise_name', ex.name);
+          alert("Errore: " + error.message);
+      }
+  };
 
-          if (!error) setLogs(prev => ({ ...prev, [key]: false }));
+  // RIAPRE PER MODIFICHE (Cancella il log precedente per riscriverlo)
+  const deleteLog = async (ex) => {
+      const key = `${ex.name}_${activeDay}`;
+      
+      const { error } = await supabase.from('workout_logs')
+          .delete()
+          .eq('program_id', id)
+          .eq('week_number', activeWeek)
+          .eq('day_label', activeDay)
+          .eq('exercise_name', ex.name);
+
+      if (!error) {
+          const oldData = logs[key];
+          setLogs(prev => {
+              const newState = { ...prev };
+              delete newState[key];
+              return newState;
+          });
+          // Riapre subito il pop-up con i vecchi dati per modificarli
+          openEdit(ex.name, oldData);
       }
   };
 
@@ -138,7 +168,7 @@ export default function LivePage({ params }) {
       <div className="bg-slate-800/90 backdrop-blur sticky top-0 z-20 border-b border-slate-700 shadow-xl pt-4">
           <div className="px-4 max-w-md mx-auto">
             <h1 className="text-xl font-bold text-white mb-2">{program.title}</h1>
-
+            
             {/* WEEK SELECTOR */}
             <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar">
                 {Array.from({length: program.duration}, (_, i) => i + 1).map(week => (
@@ -187,121 +217,122 @@ export default function LivePage({ params }) {
         {currentExercises.map((ex, index) => {
             const weekData = ex.progression?.[activeWeek] || {}; 
             const key = `${ex.name}_${activeDay}`;
-            const isDone = logs[key];
-            const userIn = inputs[key] || {};
-            const history = historyLogs[key];
+            const logData = logs[key]; // Dati salvati (se esistono)
+            const isDone = !!logData;
+            const history = historyLogs[key]; // Storico settimana prima
+            const isEditing = editingId === key; // Sto modificando questo specifico esercizio?
 
             return (
-                <div key={index} className={`rounded-2xl border transition-all ${isDone ? 'bg-green-900/10 border-green-800/30' : 'bg-slate-800 border-slate-700'}`}>
+                <div key={index} className={`rounded-2xl border transition-all overflow-hidden relative ${isDone ? 'bg-green-900/10 border-green-800/30' : 'bg-slate-800 border-slate-700'}`}>
                     
-                    {/* INTESTAZIONE */}
-                    <div className="p-4 border-b border-slate-700/50">
-                        <div className="flex justify-between items-center mb-3">
-                            <h3 className={`text-lg font-bold ${isDone ? 'text-green-400' : 'text-white'}`}>{ex.name}</h3>
-                            
-                            {/* TASTO CHECK (SBAFFO) */}
-                            <button 
-                                onClick={() => toggleComplete(ex)}
-                                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg active:scale-95 ${
-                                    isDone ? 'bg-green-600 text-white hover:bg-red-500' : 'bg-slate-700 text-slate-500 hover:bg-blue-600 hover:text-white ring-2 ring-slate-600 ring-offset-2 ring-offset-slate-800'
-                                }`}
-                            >
-                                {isDone ? <Check size={24}/> : <Circle size={24}/>}
-                            </button>
-                        </div>
-
-                        {/* TARGET */}
-                        <div className="flex flex-wrap gap-2 text-xs font-bold text-slate-400">
-                             <span className="bg-slate-900 px-2 py-1 rounded border border-slate-700 text-slate-300">
-                                {weekData.sets} x {weekData.reps}
-                             </span>
-                             {weekData.weight && (
-                                 <span className="bg-slate-900 px-2 py-1 rounded border border-slate-700 text-yellow-500 flex items-center gap-1">
-                                    <Target size={10}/> {weekData.weight} Kg
-                                 </span>
-                             )}
-                             {weekData.rpe && (
-                                 <span className="bg-slate-900 px-2 py-1 rounded border border-slate-700 text-orange-400 flex items-center gap-1">
-                                    RPE {weekData.rpe}
-                                 </span>
-                             )}
-                        </div>
-
-                        {weekData.note && (
-                            <div className="mt-3 text-sm text-slate-300 italic border-l-2 border-slate-600 pl-3">
-                                "{weekData.note}"
+                    {/* --- MODALITÀ "POP-UP" (EDITING) --- */}
+                    {isEditing ? (
+                        <div className="p-4 bg-slate-800 animate-in fade-in zoom-in-95 duration-200">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-bold text-white">{ex.name}</h3>
+                                <button onClick={closeEdit} className="p-2 bg-slate-700 rounded-full text-slate-400 hover:text-white">
+                                    <X size={20}/>
+                                </button>
                             </div>
-                        )}
-                        
-                        {/* STORICO */}
-                        {history && !isDone && (
-                            <div className="mt-4 bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 flex flex-col gap-1">
-                                <div className="text-[10px] text-slate-500 uppercase font-bold flex items-center gap-1">
-                                    <History size={10}/> Settimana Scorsa (W{activeWeek - 1})
-                                </div>
-                                <div className="text-sm text-slate-300 font-mono">
-                                    <strong>{history.actual_reps || '-'}</strong> reps @ <strong>{history.actual_weight || '-'}</strong>
-                                </div>
-                            </div>
-                        )}
-                    </div>
 
-                    {/* AREA INPUT (Ora TESTO LIBERO) */}
-                    <div className="p-4 bg-slate-900/30">
-                        {!isDone ? (
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Reps Fatte</label>
                                         <input 
+                                            autoFocus
                                             type="text" 
-                                            placeholder="Es. 10-8-8" 
-                                            value={userIn.reps || ''}
-                                            className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white outline-none focus:border-blue-500 text-center font-bold text-lg placeholder:text-slate-600"
-                                            onChange={(e) => handleInputChange(ex.name, 'reps', e.target.value)}
+                                            placeholder={weekData.reps} 
+                                            value={tempInput.reps}
+                                            className="w-full bg-slate-900 border border-slate-600 rounded-xl p-4 text-white outline-none focus:border-blue-500 text-center font-bold text-xl"
+                                            onChange={(e) => setTempInput({...tempInput, reps: e.target.value})}
                                         />
                                     </div>
                                     <div>
                                         <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Kg Usati</label>
                                         <input 
                                             type="text" 
-                                            placeholder="Es. 60-65-70" 
-                                            value={userIn.weight || ''}
-                                            className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white outline-none focus:border-blue-500 text-center font-bold text-lg placeholder:text-slate-600"
-                                            onChange={(e) => handleInputChange(ex.name, 'weight', e.target.value)}
+                                            placeholder={weekData.weight || "-"} 
+                                            value={tempInput.weight}
+                                            className="w-full bg-slate-900 border border-slate-600 rounded-xl p-4 text-white outline-none focus:border-blue-500 text-center font-bold text-xl"
+                                            onChange={(e) => setTempInput({...tempInput, weight: e.target.value})}
                                         />
                                     </div>
                                 </div>
-                                
+
                                 <div>
-                                    <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block flex items-center gap-1"><MessageSquare size={10}/> Le tue note</label>
+                                    <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Note per la prossima volta</label>
                                     <textarea 
-                                        placeholder="..." 
-                                        value={userIn.notes || ''}
+                                        placeholder="Note..." 
+                                        value={tempInput.notes}
                                         rows="2"
-                                        className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-sm text-white outline-none focus:border-blue-500 resize-none"
-                                        onChange={(e) => handleInputChange(ex.name, 'notes', e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-sm text-white outline-none focus:border-blue-500 resize-none"
+                                        onChange={(e) => setTempInput({...tempInput, notes: e.target.value})}
                                     />
                                 </div>
+
+                                <button 
+                                    onClick={() => saveLog(ex)}
+                                    className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg active:scale-95 transition-all"
+                                >
+                                    <Check size={24}/> SALVA RISULTATO
+                                </button>
                             </div>
-                        ) : (
-                            // RIEPILOGO COMPLETATO
-                            <div className="space-y-2">
-                                <div className="flex gap-4 text-sm text-slate-300 items-center bg-slate-950/30 p-2 rounded">
-                                    <span className="flex-1">Fatto: <strong className="text-white text-md">{userIn.reps || 'Ok'}</strong></span>
-                                    <span className="flex-1 text-right">Carico: <strong className="text-white text-md">{userIn.weight || '-'}</strong></span>
-                                </div>
-                                {userIn.notes && (
-                                    <div className="text-xs text-slate-400 bg-slate-800 p-2 rounded border border-slate-700">
-                                        {userIn.notes}
+                        </div>
+                    ) : (
+                        // --- MODALITÀ VISUALIZZAZIONE (TARGET + STORICO) ---
+                        <div className="p-4">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h3 className={`text-xl font-bold mb-1 ${isDone ? 'text-green-400' : 'text-white'}`}>{ex.name}</h3>
+                                    
+                                    {/* TARGET DEL COACH */}
+                                    <div className="flex gap-2 text-xs font-bold text-slate-400 mb-2">
+                                        <span className="bg-slate-900 px-2 py-1 rounded text-slate-300 border border-slate-700">
+                                            {weekData.sets} x {weekData.reps}
+                                        </span>
+                                        {weekData.rpe && <span className="text-orange-400 bg-slate-900 px-2 py-1 rounded border border-slate-700">RPE {weekData.rpe}</span>}
+                                        {weekData.rest && <span className="text-blue-400 bg-slate-900 px-2 py-1 rounded border border-slate-700">{weekData.rest}</span>}
                                     </div>
-                                )}
-                                <div className="text-xs text-green-500 font-bold flex items-center gap-1 mt-2 justify-end">
-                                    <Check size={12}/> Salvato
+
+                                    {/* STORICO SETTIMANA SCORSA */}
+                                    {history && !isDone && (
+                                        <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-900/50 p-2 rounded-lg border border-slate-800 w-fit">
+                                            <History size={12}/> 
+                                            <span>Scorsa: <strong>{history.actual_reps || '-'}</strong> @ <strong>{history.actual_weight || '-'}</strong></span>
+                                        </div>
+                                    )}
+
+                                    {/* RISULTATO SALVATO (Se fatto) */}
+                                    {isDone && (
+                                        <div className="mt-2 text-sm">
+                                            <div className="text-white">
+                                                Fatto: <strong>{logData.reps || weekData.reps}</strong> @ <strong>{logData.weight || '-'}</strong>
+                                            </div>
+                                            {logData.notes && <div className="text-xs text-slate-400 italic mt-1">"{logData.notes}"</div>}
+                                        </div>
+                                    )}
                                 </div>
+
+                                {/* BOTTONE AZIONE (+ o EDIT) */}
+                                {isDone ? (
+                                    <button 
+                                        onClick={() => deleteLog(ex)}
+                                        className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 text-slate-400 flex items-center justify-center hover:bg-slate-700 transition"
+                                    >
+                                        <Edit2 size={18}/>
+                                    </button>
+                                ) : (
+                                    <button 
+                                        onClick={() => openEdit(ex.name, null)}
+                                        className="w-14 h-14 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg hover:bg-blue-500 active:scale-95 transition-all"
+                                    >
+                                        <Plus size={28}/>
+                                    </button>
+                                )}
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
                 </div>
             );
         })}
