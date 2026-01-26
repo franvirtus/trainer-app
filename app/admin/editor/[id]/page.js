@@ -4,18 +4,16 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Plus, Trash2, GripVertical, Copy, ArrowRightCircle } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, GripVertical, Copy, AlertCircle } from 'lucide-react';
 
 export default function EditorPage() {
   const params = useParams();
   const id = params?.id;
   const router = useRouter();
   
-  // --- CHIAVI DIRETTE ---
   const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
   const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
   const supabase = createClient(supabaseUrl, supabaseKey);
-  // ---------------------
 
   const [program, setProgram] = useState(null);
   const [exercises, setExercises] = useState([]);
@@ -23,33 +21,25 @@ export default function EditorPage() {
   
   const [activeDay, setActiveDay] = useState('Giorno A');
   const [days, setDays] = useState(['Giorno A']);
+  const [viewWeek, setViewWeek] = useState(1); // QUALE SETTIMANA STAI GUARDANDO
 
   useEffect(() => {
     if (id) loadData();
   }, [id]);
 
   const loadData = async () => {
-    // 1. Carica Programma
     const { data: prog } = await supabase.from('programs').select('*').eq('id', id).single();
     if (prog) setProgram(prog);
 
-    // 2. Carica Esercizi
     const { data: ex } = await supabase.from('exercises').select('*').eq('program_id', id).order('created_at', { ascending: true });
     
     if (ex && ex.length > 0) {
-        // Normalizziamo i dati: se 'progression' è vuoto, lo creiamo basandoci sui vecchi campi
+        // Normalizzazione dati
         const normalizedEx = ex.map(e => {
             if (!e.progression || Object.keys(e.progression).length === 0) {
-                // Migrazione al volo dei vecchi dati
                 const defaultProg = {};
                 for(let i=1; i<=(prog?.duration || 4); i++) {
-                    defaultProg[i] = { 
-                        sets: e.sets || '', 
-                        reps: e.reps || '', 
-                        weight: e.weight || '',
-                        rpe: e.rpe || '',
-                        rest: e.rest || ''
-                    };
+                    defaultProg[i] = { sets: e.sets || '', reps: e.reps || '', weight: e.weight || '', rpe: '', rest: '' };
                 }
                 return { ...e, progression: defaultProg };
             }
@@ -66,10 +56,9 @@ export default function EditorPage() {
   const currentExercises = exercises.filter(ex => (ex.day || 'Giorno A') === activeDay);
 
   const addExercise = () => {
-    // Crea una progressione vuota per tutte le settimane
     const emptyProgression = {};
     for(let i=1; i<=(program?.duration || 4); i++) {
-        emptyProgression[i] = { sets: '3', reps: '10', weight: '', rpe: '8', rest: '90"' };
+        emptyProgression[i] = { sets: '3', reps: '10', weight: '', rpe: '', rest: '90"' };
     }
 
     setExercises([...exercises, { 
@@ -85,12 +74,12 @@ export default function EditorPage() {
       setExercises(exercises.map(e => (e === exToUpdate ? { ...e, name: val } : e)));
   };
 
-  const updateProgression = (exToUpdate, week, field, val) => {
+  const updateProgression = (exToUpdate, field, val) => {
       const updatedExercises = exercises.map(e => {
           if (e === exToUpdate) {
               const newProg = { ...e.progression };
-              if (!newProg[week]) newProg[week] = {};
-              newProg[week] = { ...newProg[week], [field]: val };
+              if (!newProg[viewWeek]) newProg[viewWeek] = {};
+              newProg[viewWeek] = { ...newProg[viewWeek], [field]: val };
               return { ...e, progression: newProg };
           }
           return e;
@@ -98,21 +87,29 @@ export default function EditorPage() {
       setExercises(updatedExercises);
   };
 
-  // Funzione Magica: Copia la Settimana 1 su tutte le altre
-  const copyWeekOneToAll = (exToUpdate) => {
-      const week1Data = exToUpdate.progression['1'];
-      const newProg = {};
-      for(let i=1; i<=(program?.duration || 4); i++) {
-          newProg[i] = { ...week1Data };
-      }
-      setExercises(exercises.map(e => (e === exToUpdate ? { ...e, progression: newProg } : e)));
+  // FUNZIONE: Copia la settimana corrente su TUTTE le altre
+  const copyCurrentWeekToAll = () => {
+      if(!confirm(`Vuoi copiare i parametri della Settimana ${viewWeek} su TUTTE le altre settimane per questo giorno?`)) return;
+
+      const updatedExercises = exercises.map(ex => {
+          if ((ex.day || 'Giorno A') === activeDay) {
+              const sourceData = ex.progression[viewWeek];
+              const newProg = { ...ex.progression };
+              for(let i=1; i<=(program?.duration || 4); i++) {
+                  newProg[i] = { ...sourceData };
+              }
+              return { ...ex, progression: newProg };
+          }
+          return ex;
+      });
+      setExercises(updatedExercises);
+      alert("Fatto! Tutte le settimane ora sono uguali alla " + viewWeek);
   };
 
   const removeExercise = (ex) => {
       setExercises(exercises.filter(e => e !== ex));
   };
   
-  // GESTIONE GIORNI SEMPLIFICATA
   const addNewDay = () => {
     if (days.length >= 7) return;
     const nextChar = String.fromCharCode(65 + days.length);
@@ -122,8 +119,14 @@ export default function EditorPage() {
   };
 
   const saveAll = async () => {
+    // 1. VALIDAZIONE NOME
+    const missingName = exercises.find(ex => !ex.name || ex.name.trim() === '');
+    if (missingName) {
+        alert("Attenzione: Uno o più esercizi non hanno nome! Inseriscilo prima di salvare.");
+        return;
+    }
+
     setSaving(true);
-    // Cancelliamo i vecchi per pulizia
     await supabase.from('exercises').delete().eq('program_id', id);
 
     const toSave = exercises.map(ex => ({
@@ -131,8 +134,8 @@ export default function EditorPage() {
         name: ex.name,
         notes: ex.notes,
         day: ex.day || 'Giorno A',
-        progression: ex.progression, // SALVIAMO IL JSON COMPLETO
-        // Salviamo anche i campi flat per compatibilità/ricerca, prendendo la week 1 come riferimento
+        progression: ex.progression,
+        // Dati di fallback per ricerche semplici
         sets: ex.progression['1']?.sets || '',
         reps: ex.progression['1']?.reps || '',
         weight: ex.progression['1']?.weight || '',
@@ -142,6 +145,8 @@ export default function EditorPage() {
         const { error } = await supabase.from('exercises').insert(toSave);
         if (error) alert("Errore: " + error.message);
         else alert("Salvato! ✅");
+    } else {
+        alert("Scheda salvata (vuota).");
     }
     setSaving(false);
     loadData();
@@ -153,12 +158,12 @@ export default function EditorPage() {
   return (
     <div className="min-h-screen bg-slate-50 p-4 font-sans pb-40">
       {/* HEADER */}
-      <div className="max-w-[95%] mx-auto flex justify-between items-center mb-6 sticky top-2 bg-white/90 backdrop-blur p-4 rounded-xl shadow-sm z-50 border border-slate-200">
+      <div className="max-w-4xl mx-auto flex justify-between items-center mb-6 sticky top-2 bg-white/90 backdrop-blur p-4 rounded-xl shadow-sm z-50 border border-slate-200">
           <div className="flex items-center gap-4">
               <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-full"><ArrowLeft size={20}/></button>
               <div>
                   <h1 className="text-xl font-bold text-slate-800">{program.title}</h1>
-                  <p className="text-xs text-slate-500 font-bold uppercase">{program.duration} SETTIMANE • {activeDay}</p>
+                  <p className="text-xs text-slate-500 font-bold uppercase">{program.duration} SETTIMANE</p>
               </div>
           </div>
           <button onClick={saveAll} disabled={saving} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow hover:bg-black transition">
@@ -166,70 +171,102 @@ export default function EditorPage() {
           </button>
       </div>
 
-      <div className="max-w-[95%] mx-auto">
-        {/* TABS GIORNI */}
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+      <div className="max-w-4xl mx-auto">
+        
+        {/* SELETTORE GIORNO */}
+        <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
             {days.map(day => (
-                <button key={day} onClick={() => setActiveDay(day)} className={`px-6 py-3 rounded-xl font-bold text-sm transition shadow-sm ${activeDay === day ? 'bg-blue-600 text-white ring-2 ring-blue-200' : 'bg-white text-slate-500 hover:bg-slate-100'}`}>
+                <button key={day} onClick={() => setActiveDay(day)} className={`px-5 py-2 rounded-lg font-bold text-sm transition ${activeDay === day ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 border border-slate-200'}`}>
                     {day}
                 </button>
             ))}
-            {days.length < 7 && <button onClick={addNewDay} className="px-4 py-2 rounded-xl border-2 border-dashed border-slate-300 text-slate-400 hover:border-blue-500 hover:text-blue-600"><Plus/></button>}
+            {days.length < 7 && <button onClick={addNewDay} className="px-3 py-2 rounded-lg border border-dashed border-slate-300 text-slate-400"><Plus size={16}/></button>}
         </div>
 
-        {/* LISTA ESERCIZI - MATRIX VIEW */}
-        <div className="space-y-8">
-            {currentExercises.map((ex, idx) => (
-                <div key={idx} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    {/* INTESTAZIONE ESERCIZIO */}
-                    <div className="bg-slate-50 p-4 border-b border-slate-100 flex items-center gap-4">
-                        <GripVertical className="text-slate-300 cursor-move"/>
-                        <div className="flex-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Nome Esercizio</label>
-                            <input 
-                                type="text" 
-                                className="w-full text-lg font-bold bg-transparent outline-none placeholder:text-slate-300"
-                                placeholder="Es. Squat Back"
-                                value={ex.name}
-                                onChange={(e) => updateExerciseName(ex, e.target.value)}
-                            />
-                        </div>
-                        <button onClick={() => copyWeekOneToAll(ex)} className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 hover:bg-blue-100 flex items-center gap-1" title="Copia Settimana 1 su tutte">
-                            <Copy size={12}/> Copia W1 su tutte
-                        </button>
-                        <button onClick={() => removeExercise(ex)} className="text-slate-300 hover:text-red-500 p-2"><Trash2 size={18}/></button>
-                    </div>
+        {/* SELETTORE SETTIMANA (UNICA VISTA) */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 mb-6 shadow-sm">
+            <div className="flex justify-between items-center mb-3">
+                <span className="text-xs font-bold text-slate-400 uppercase">Stai modificando:</span>
+                <button onClick={copyCurrentWeekToAll} className="text-xs font-bold text-blue-600 flex items-center gap-1 hover:underline">
+                    <Copy size={12}/> Copia W{viewWeek} su tutte le settimane
+                </button>
+            </div>
+            <div className="flex gap-2 overflow-x-auto">
+                {weeks.map(w => (
+                    <button 
+                        key={w} 
+                        onClick={() => setViewWeek(w)}
+                        className={`w-10 h-10 rounded-lg font-bold flex items-center justify-center border transition ${viewWeek === w ? 'bg-slate-800 text-white border-slate-800' : 'bg-slate-50 text-slate-400 border-slate-200'}`}
+                    >
+                        {w}
+                    </button>
+                ))}
+            </div>
+        </div>
 
-                    {/* LA MATRICE (Scrollabile orizzontalmente se ci sono tante settimane) */}
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-slate-400 uppercase bg-slate-50/50">
-                                <tr>
-                                    <th className="px-4 py-2 min-w-[80px]">Week</th>
-                                    <th className="px-2 py-2 w-20">Sets</th>
-                                    <th className="px-2 py-2 w-20">Reps</th>
-                                    <th className="px-2 py-2 w-24">Carico</th>
-                                    <th className="px-2 py-2 w-20">RPE</th>
-                                    <th className="px-2 py-2 w-20">Rest</th>
-                                    <th className="px-4 py-2 min-w-[150px]">Note specifiche</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {weeks.map(week => (
-                                    <tr key={week} className="hover:bg-slate-50/50 transition">
-                                        <td className="px-4 py-3 font-bold text-slate-500 bg-slate-50/30">
-                                            W{week}
-                                        </td>
-                                        <td className="px-2"><input type="text" className="w-full font-bold text-center bg-transparent outline-none border-b border-transparent focus:border-blue-500" value={ex.progression?.[week]?.sets || ''} onChange={(e) => updateProgression(ex, week, 'sets', e.target.value)}/></td>
-                                        <td className="px-2"><input type="text" className="w-full font-bold text-center bg-transparent outline-none border-b border-transparent focus:border-blue-500" value={ex.progression?.[week]?.reps || ''} onChange={(e) => updateProgression(ex, week, 'reps', e.target.value)}/></td>
-                                        <td className="px-2"><input type="text" className="w-full font-bold text-center bg-transparent outline-none border-b border-transparent focus:border-blue-500" value={ex.progression?.[week]?.weight || ''} onChange={(e) => updateProgression(ex, week, 'weight', e.target.value)}/></td>
-                                        <td className="px-2"><input type="text" className="w-full font-bold text-center text-blue-600 bg-transparent outline-none border-b border-transparent focus:border-blue-500" value={ex.progression?.[week]?.rpe || ''} onChange={(e) => updateProgression(ex, week, 'rpe', e.target.value)}/></td>
-                                        <td className="px-2"><input type="text" className="w-full font-bold text-center text-slate-500 bg-transparent outline-none border-b border-transparent focus:border-blue-500" value={ex.progression?.[week]?.rest || ''} onChange={(e) => updateProgression(ex, week, 'rest', e.target.value)}/></td>
-                                        <td className="px-4"><input type="text" className="w-full text-slate-500 bg-transparent outline-none" placeholder="..." value={ex.progression?.[week]?.note || ''} onChange={(e) => updateProgression(ex, week, 'note', e.target.value)}/></td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+        {/* LISTA ESERCIZI (SOLO SETTIMANA SELEZIONATA) */}
+        <div className="space-y-4">
+            {currentExercises.map((ex, idx) => (
+                <div key={idx} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex gap-4 group">
+                    <GripVertical className="text-slate-300 cursor-move mt-2"/>
+                    
+                    <div className="flex-1 space-y-4">
+                        {/* Riga 1: Nome e Delete */}
+                        <div className="flex gap-3">
+                            <div className="flex-1">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Esercizio *</label>
+                                <input 
+                                    type="text" 
+                                    className={`w-full text-lg font-bold bg-transparent outline-none border-b ${!ex.name ? 'border-red-300 bg-red-50' : 'border-transparent'}`}
+                                    placeholder="Es. Squat (Obbligatorio)"
+                                    value={ex.name}
+                                    onChange={(e) => updateExerciseName(ex, e.target.value)}
+                                />
+                            </div>
+                            <button onClick={() => removeExercise(ex)} className="text-slate-300 hover:text-red-500 p-2"><Trash2 size={18}/></button>
+                        </div>
+
+                        {/* Riga 2: Parametri della SETTIMANA CORRENTE */}
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 bg-slate-50 p-3 rounded-lg">
+                            <div>
+                                <label className="text-[9px] font-bold text-slate-400 uppercase">Serie</label>
+                                <input type="text" className="w-full font-bold bg-transparent outline-none" placeholder="3" 
+                                    value={ex.progression?.[viewWeek]?.sets || ''} 
+                                    onChange={(e) => updateProgression(ex, 'sets', e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[9px] font-bold text-slate-400 uppercase">Reps</label>
+                                <input type="text" className="w-full font-bold bg-transparent outline-none" placeholder="10" 
+                                    value={ex.progression?.[viewWeek]?.reps || ''} 
+                                    onChange={(e) => updateProgression(ex, 'reps', e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[9px] font-bold text-slate-400 uppercase">Carico Target</label>
+                                <input type="text" className="w-full font-bold bg-transparent outline-none" placeholder="facolt." 
+                                    value={ex.progression?.[viewWeek]?.weight || ''} 
+                                    onChange={(e) => updateProgression(ex, 'weight', e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[9px] font-bold text-slate-400 uppercase">Recupero</label>
+                                <input type="text" className="w-full font-bold text-blue-600 bg-transparent outline-none" placeholder='90"' 
+                                    value={ex.progression?.[viewWeek]?.rest || ''} 
+                                    onChange={(e) => updateProgression(ex, 'rest', e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[9px] font-bold text-slate-400 uppercase">RPE (Fatica)</label>
+                                <input type="text" className="w-full font-bold text-orange-500 bg-transparent outline-none" placeholder="1-10" 
+                                    value={ex.progression?.[viewWeek]?.rpe || ''} 
+                                    onChange={(e) => updateProgression(ex, 'rpe', e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        
+                        {/* Note */}
+                        <input type="text" className="w-full text-xs text-slate-500 bg-transparent outline-none border-b border-transparent focus:border-slate-300" placeholder="Note tecniche..." value={ex.notes} onChange={(e) => updateExercise(ex, 'notes', e.target.value)}/>
                     </div>
                 </div>
             ))}
