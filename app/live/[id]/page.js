@@ -121,10 +121,24 @@ export default function LivePage({ params }) {
   };
 
   const saveLog = async (ex) => {
+      // --- VALIDAZIONE SEVERA ---
+      // Controlliamo ogni singola riga
+      for (let i = 0; i < setLogsData.length; i++) {
+          const row = setLogsData[i];
+          const r = parseFloat(row.reps);
+          const w = parseFloat(row.weight);
+
+          // Se vuoto o <= 0
+          if (!row.reps || r <= 0 || !row.weight || w <= 0) {
+              alert(`Errore alla Serie ${i + 1}: Inserisci Reps e Kg validi (maggiori di 0).`);
+              return; // Blocca tutto
+          }
+      }
+
       const key = `${ex.name}_${activeDay}`;
       
-      const repsString = setLogsData.map(r => r.reps || '0').join('-');
-      const weightString = setLogsData.map(r => r.weight || '0').join('-');
+      const repsString = setLogsData.map(r => r.reps).join('-');
+      const weightString = setLogsData.map(r => r.weight).join('-');
 
       const { error } = await supabase.from('workout_logs').insert([{
           program_id: id,
@@ -227,24 +241,24 @@ export default function LivePage({ params }) {
 
                             {/* INTESTAZIONE TABELLA */}
                             <div className="flex text-[10px] uppercase font-bold text-slate-500 mb-2 px-1">
-                                <span className="w-8 text-center">Set</span>
+                                <span className="w-6 text-center">#</span>
                                 <span className="flex-1 text-center">Reps</span>
                                 <span className="flex-1 text-center">Kg</span>
-                                <span className="w-8"></span>
+                                <span className="w-6"></span>
                             </div>
 
-                            {/* INPUT COMPATTI E SENZA FRECCE */}
+                            {/* INPUT ULTRA-COMPATTI */}
                             <div className="space-y-2 mb-4">
                                 {setLogsData.map((row, i) => (
                                     <div key={i} className="flex gap-2 items-center">
-                                        <div className="w-8 text-slate-500 font-bold text-center text-sm">{i + 1}</div>
+                                        <div className="w-6 text-slate-500 font-bold text-center text-xs">{i + 1}</div>
                                         
                                         <input 
                                             type="number" 
                                             placeholder={weekData.reps} 
                                             value={row.reps}
                                             onChange={(e) => updateRow(i, 'reps', e.target.value)}
-                                            className="flex-1 h-9 bg-slate-900 border border-slate-600 rounded-lg text-center text-white font-bold text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-slate-700 [&::-webkit-inner-spin-button]:appearance-none"
+                                            className="flex-1 h-8 bg-slate-900 border border-slate-600 rounded text-center text-white font-bold text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-700 [&::-webkit-inner-spin-button]:appearance-none"
                                         />
                                         
                                         <input 
@@ -252,12 +266,12 @@ export default function LivePage({ params }) {
                                             placeholder={weekData.weight || '-'}
                                             value={row.weight}
                                             onChange={(e) => updateRow(i, 'weight', e.target.value)}
-                                            className="flex-1 h-9 bg-slate-900 border border-slate-600 rounded-lg text-center text-white font-bold text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-slate-700 [&::-webkit-inner-spin-button]:appearance-none"
+                                            className="flex-1 h-8 bg-slate-900 border border-slate-600 rounded text-center text-white font-bold text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-700 [&::-webkit-inner-spin-button]:appearance-none"
                                         />
 
                                         {setLogsData.length > 1 && (
-                                            <button onClick={() => removeSetRow(i)} className="w-8 h-9 flex items-center justify-center text-slate-600 hover:text-red-400 transition">
-                                                <Trash2 size={16}/>
+                                            <button onClick={() => removeSetRow(i)} className="w-6 h-8 flex items-center justify-center text-slate-600 hover:text-red-400 transition">
+                                                <Trash2 size={14}/>
                                             </button>
                                         )}
                                     </div>
@@ -266,7 +280,7 @@ export default function LivePage({ params }) {
 
                             {/* BOTTONI AZIONE */}
                             <div className="flex gap-2 mb-4">
-                                <button onClick={addSetRow} className="flex-1 py-2 border border-dashed border-slate-600 rounded-lg text-slate-400 text-xs font-bold hover:bg-slate-700 hover:text-white transition flex items-center justify-center gap-1">
+                                <button onClick={addSetRow} className="flex-1 py-2 border border-dashed border-slate-600 rounded text-slate-400 text-xs font-bold hover:bg-slate-700 hover:text-white transition flex items-center justify-center gap-1">
                                     <Plus size={14}/> AGGIUNGI SERIE
                                 </button>
                             </div>
@@ -278,7 +292,7 @@ export default function LivePage({ params }) {
                                     value={noteInput}
                                     rows="1"
                                     onChange={(e) => setNoteInput(e.target.value)}
-                                    className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-sm text-white outline-none focus:border-blue-500 resize-none mb-4 placeholder:text-slate-600"
+                                    className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white outline-none focus:border-blue-500 resize-none mb-4 placeholder:text-slate-600"
                                 />
                             </div>
 
