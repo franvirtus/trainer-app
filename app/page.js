@@ -1,87 +1,93 @@
 "use client";
-// 1. Forza la modalità dinamica per evitare errori di build
-export const dynamic = 'force-dynamic';
-
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { UserPlus, Users, ChevronRight, Mail } from 'lucide-react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Lock, Mail, ArrowRight, Dumbbell } from 'lucide-react';
 
-export default function HomePage() {
-  const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function LoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  // --- CONFIGURAZIONE DIRETTA (Hardcoded) ---
-  // Abbiamo inserito direttamente le chiavi per aggirare il problema di Vercel
+  // --- CHIAVI DIRETTE ---
   const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
   const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
-
   const supabase = createClient(supabaseUrl, supabaseKey);
-  // ------------------------------------------
 
-  useEffect(() => {
-    fetchClients();
-  }, []);
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
 
-  const fetchClients = async () => {
-    const { data } = await supabase
-      .from('clients')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (data) setClients(data);
-    setLoading(false);
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      alert("Errore login: " + error.message);
+      setLoading(false);
+    } else {
+      // Login riuscito -> Vai alla Dashboard Admin
+      router.push('/admin');
+    }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 font-sans">
-      <div className="max-w-4xl mx-auto">
-        {/* HEADER */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">Portale Trainer</h1>
-            <p className="text-slate-500">Gestione Atleti e Schede</p>
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
+      <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md border-4 border-slate-800">
+        
+        <div className="text-center mb-8">
+          <div className="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg text-white">
+            <Dumbbell size={32} />
           </div>
-          
-          <Link href="/admin/new-client" className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-700 transition shadow-lg">
-            <UserPlus size={20} /> Nuovo Atleta
-          </Link>
+          <h1 className="text-2xl font-bold text-slate-800">Trainer Access</h1>
+          <p className="text-slate-500 text-sm">Entra per gestire i tuoi atleti</p>
         </div>
 
-        {loading ? (
-          <div className="text-center py-10 text-slate-400">Caricamento atleti...</div>
-        ) : clients.length === 0 ? (
-          <div className="bg-white p-10 rounded-xl text-center shadow-sm border border-slate-200">
-             <div className="bg-slate-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400"><Users size={32}/></div>
-             <h3 className="font-bold text-slate-700 mb-2">Nessun Atleta Trovato</h3>
-             <p className="text-slate-500 text-sm">Clicca su "Nuovo Atleta" per iniziare.</p>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Email</label>
+            <div className="flex items-center bg-slate-100 rounded-xl p-3 border border-transparent focus-within:border-blue-500 focus-within:bg-white transition-all">
+              <Mail size={20} className="text-slate-400 mr-3" />
+              <input 
+                type="email" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="nome@esempio.com"
+                className="bg-transparent outline-none w-full text-slate-800 font-medium"
+                required
+              />
+            </div>
           </div>
-        ) : (
-          <div className="grid gap-3">
-            {clients.map((client) => (
-              <Link key={client.id} href={`/admin/clients/${client.id}`}>
-                  <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center hover:border-blue-300 hover:shadow-md transition cursor-pointer group">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg uppercase">
-                        {client.full_name ? client.full_name.charAt(0) : "?"}
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-lg text-slate-800 group-hover:text-blue-600 transition">{client.full_name}</h3>
-                        <div className="flex gap-3 text-xs text-slate-400 mt-0.5">
-                            {client.email && <span className="flex items-center gap-1"><Mail size={10}/> {client.email}</span>}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center text-slate-300 group-hover:text-blue-500">
-                       <span className="text-xs font-bold mr-2 uppercase tracking-wide">Apri Profilo</span>
-                       <ChevronRight size={20} />
-                    </div>
-                  </div>
-              </Link>
-            ))}
+
+          <div>
+            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Password</label>
+            <div className="flex items-center bg-slate-100 rounded-xl p-3 border border-transparent focus-within:border-blue-500 focus-within:bg-white transition-all">
+              <Lock size={20} className="text-slate-400 mr-3" />
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="bg-transparent outline-none w-full text-slate-800 font-medium"
+                required
+              />
+            </div>
           </div>
-        )}
+
+          <button 
+            type="submit" 
+            disabled={loading}
+            className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold text-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-xl hover:scale-[1.02] active:scale-95"
+          >
+            {loading ? "Accesso..." : <>ENTRA <ArrowRight size={20}/></>}
+          </button>
+        </form>
+
+        <p className="text-center text-xs text-slate-400 mt-6">
+          System v2.0 • Powered by Next.js
+        </p>
       </div>
     </div>
   );
