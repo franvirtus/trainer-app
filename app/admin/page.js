@@ -25,10 +25,10 @@ export default function AdminDashboard() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.push('/'); return; }
 
-    // Nome utente (dai metadata o dalla mail)
+    // Prendi nome
     setTrainerName(user.user_metadata?.first_name || user.email.split('@')[0]);
 
-    // SCARICA I CLIENTI (Il filtro avviene automatico grazie alla Policy SQL che abbiamo appena messo)
+    // Scarica clienti (la policy SQL filtra automaticamente i tuoi)
     const { data, error } = await supabase
       .from('clients')
       .select('*')
@@ -42,11 +42,14 @@ export default function AdminDashboard() {
     const name = prompt("Nome nuovo atleta:");
     if (!name) return;
 
-    // Non serve più passare trainer_id, il DB lo mette in automatico!
+    // Inserimento semplice: il DB assegna il tuo ID automaticamente
     const { error } = await supabase.from('clients').insert([{ name }]);
     
-    if (error) alert("Errore: " + error.message);
-    else fetchData();
+    if (error) {
+        alert("Errore DB: " + error.message);
+    } else {
+        fetchData(); // Ricarica la lista
+    }
   };
 
   const handleLogout = async () => {
