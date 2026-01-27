@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, use } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Info, Check, Plus, X, History, Edit2, Trash2 } from 'lucide-react';
+import { Info, Check, Plus, X, History, Edit2, Trash2, MessageSquare } from 'lucide-react';
 
 export default function LivePage({ params }) {
   const { id } = use(params);
@@ -53,7 +53,8 @@ export default function LivePage({ params }) {
         if (savedLogs) {
             savedLogs.forEach(log => {
                 const key = `${log.exercise_name}_${log.day_label}`; 
-                logsMap[key] = log;
+                // Mappiamo correttamente le note
+                logsMap[key] = { ...log, notes: log.athlete_notes };
             });
         }
         setLogs(logsMap);
@@ -90,7 +91,7 @@ export default function LivePage({ params }) {
   const openEdit = (exName, existingData) => {
       const key = `${exName}_${activeDay}`;
       setEditingId(key);
-      setNoteInput(existingData?.athlete_notes || '');
+      setNoteInput(existingData?.notes || ''); // Carica le note esistenti
 
       if (existingData) {
           setSetLogsData(parseSetData(existingData.actual_reps, existingData.actual_weight));
@@ -112,22 +113,21 @@ export default function LivePage({ params }) {
   };
 
   const addSetRow = () => {
-      setSetLogsData([...setSetLogsData, { reps: '', weight: '' }]);
+      setSetLogsData(prev => [...prev, { reps: '', weight: '' }]);
   };
 
   const removeSetRow = (index) => {
-      const newData = setLogsData.filter((_, i) => i !== index);
-      setSetLogsData(newData);
+      setSetLogsData(prev => prev.filter((_, i) => i !== index));
   };
 
   const saveLog = async (ex) => {
-      // VALIDAZIONE: Blocca se 0 o vuoto
+      // VALIDAZIONE
       for (let i = 0; i < setLogsData.length; i++) {
           const row = setLogsData[i];
           const r = parseFloat(row.reps);
           const w = parseFloat(row.weight);
           if (!row.reps || r <= 0 || !row.weight || w <= 0) {
-              alert(`Errore Set ${i + 1}: Inserisci valori validi (>0).`);
+              alert(`Errore Set ${i + 1}: Inserisci valori validi.`);
               return;
           }
       }
@@ -136,8 +136,7 @@ export default function LivePage({ params }) {
       const repsString = setLogsData.map(r => r.reps).join('-');
       const weightString = setLogsData.map(r => r.weight).join('-');
 
-      // UPSERT LOGICA (Cancella e riscrivi per sicurezza o update)
-      // Qui facciamo delete + insert per semplicità di gestione array
+      // Cancelliamo il vecchio log per evitare duplicati (Upsert manuale)
       await supabase.from('workout_logs').delete().eq('program_id', id).eq('week_number', activeWeek).eq('day_label', activeDay).eq('exercise_name', ex.name);
 
       const { error } = await supabase.from('workout_logs').insert([{
@@ -158,7 +157,7 @@ export default function LivePage({ params }) {
               [key]: { 
                   actual_reps: repsString, 
                   actual_weight: weightString, 
-                  athlete_notes: noteInput,
+                  notes: noteInput,
                   actual_sets: setLogsData.length.toString()
               } 
           }));
@@ -218,18 +217,15 @@ export default function LivePage({ params }) {
             return (
                 <div key={index} className={`rounded-2xl border transition-all overflow-hidden relative ${isDone ? 'bg-green-900/10 border-green-800/30' : 'bg-slate-800 border-slate-700'}`}>
                     
-                    {/* --- POP-UP EDITING COMPATTO --- */}
+                    {/* --- POP-UP EDITING (COMPATTO) --- */}
                     {isEditing ? (
                         <div className="p-4 bg-slate-800 animate-in fade-in zoom-in-95 duration-200">
                             <div className="flex justify-between items-center mb-4">
-                                <div>
-                                    <h3 className="text-lg font-bold text-white">{ex.name}</h3>
-                                    <p className="text-xs text-slate-400">Target: {weekData.sets} x {weekData.reps}</p>
-                                </div>
+                                <h3 className="text-lg font-bold text-white">{ex.name}</h3>
                                 <button onClick={closeEdit} className="p-2 bg-slate-700 rounded-full text-slate-400 hover:text-white"><X size={20}/></button>
                             </div>
 
-                            {/* INTESTAZIONE TABELLA */}
+                            {/* INTESTAZIONE */}
                             <div className="flex text-[10px] uppercase font-bold text-slate-500 mb-2 px-1">
                                 <span className="w-6 text-center">#</span>
                                 <span className="flex-1 text-center">Reps</span>
@@ -237,13 +233,13 @@ export default function LivePage({ params }) {
                                 <span className="w-6"></span>
                             </div>
 
-                            {/* INPUT ULTRA-COMPATTI E SENZA FRECCE */}
+                            {/* INPUT RIGHE */}
                             <div className="space-y-2 mb-4">
                                 {setLogsData.map((row, i) => (
                                     <div key={i} className="flex gap-2 items-center">
                                         <div className="w-6 text-slate-500 font-bold text-center text-xs">{i + 1}</div>
                                         
-                                        {/* REPS INPUT */}
+                                        {/* REPS */}
                                         <input 
                                             type="number" 
                                             placeholder={weekData.reps} 
@@ -252,7 +248,7 @@ export default function LivePage({ params }) {
                                             className="flex-1 h-8 bg-slate-900 border border-slate-600 rounded text-center text-white font-bold text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                         />
                                         
-                                        {/* KG INPUT */}
+                                        {/* KG */}
                                         <input 
                                             type="number" 
                                             placeholder={weekData.weight || '-'}
@@ -261,11 +257,12 @@ export default function LivePage({ params }) {
                                             className="flex-1 h-8 bg-slate-900 border border-slate-600 rounded text-center text-white font-bold text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                         />
 
-                                        {setLogsData.length > 1 && (
+                                        {/* TASTO CESTINO (Solo se > 1 riga) */}
+                                        {setLogsData.length > 1 ? (
                                             <button onClick={() => removeSetRow(i)} className="w-6 h-8 flex items-center justify-center text-slate-600 hover:text-red-400 transition">
-                                                <Trash2 size={14}/>
+                                                <Trash2 size={16}/>
                                             </button>
-                                        )}
+                                        ) : <div className="w-6"></div>}
                                     </div>
                                 ))}
                             </div>
@@ -277,31 +274,26 @@ export default function LivePage({ params }) {
                                 </button>
                             </div>
 
-                            <div>
-                                <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Le tue note:</label>
-                                <textarea 
-                                    placeholder="Sensazioni..." 
-                                    value={noteInput}
-                                    rows="1"
-                                    onChange={(e) => setNoteInput(e.target.value)}
-                                    className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white outline-none focus:border-blue-500 resize-none mb-4 placeholder:text-slate-600"
-                                />
-                            </div>
+                            <textarea 
+                                placeholder="Note (opzionali)..." 
+                                value={noteInput}
+                                rows="2"
+                                onChange={(e) => setNoteInput(e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm text-white outline-none focus:border-blue-500 resize-none mb-4 placeholder:text-slate-600"
+                            />
 
-                            {/* TASTO SBAFFO DI COMPLETAMENTO */}
+                            {/* TASTO SALVA */}
                             <button onClick={() => saveLog(ex)} className="w-full bg-green-600 text-white font-bold py-3 rounded-xl flex justify-center items-center gap-2 shadow-lg hover:bg-green-500 transition-all active:scale-95">
-                                <Check size={20}/> SALVA
+                                <Check size={20}/> SALVA TUTTO
                             </button>
                         </div>
                     ) : (
                         
                         // --- CARD CHIUSA (VISUALIZZAZIONE) ---
                         <div className="p-5 flex flex-col items-center text-center">
-                             
-                            {/* TITOLO */}
                             <h3 className={`text-xl font-bold mb-2 ${isDone ? 'text-green-400' : 'text-white'}`}>{ex.name}</h3>
                             
-                            {/* TARGET BOX */}
+                            {/* TARGET */}
                             <div className="flex flex-wrap justify-center gap-2 text-xs font-bold mb-3">
                                 <span className="bg-slate-950 px-3 py-1.5 rounded text-slate-300 border border-slate-800">{weekData.sets} x {weekData.reps}</span>
                                 {weekData.weight && <span className="text-yellow-500 bg-slate-950 px-3 py-1.5 rounded border border-slate-800">{weekData.weight} Kg</span>}
@@ -317,7 +309,7 @@ export default function LivePage({ params }) {
                                 </div>
                             )}
 
-                            {/* RISULTATI SALVATI (Se fatto) */}
+                            {/* RISULTATI (Se fatto) */}
                             {isDone && (
                                 <div className="w-full bg-slate-900/50 rounded-xl p-3 border border-slate-800 mb-3 animate-in fade-in">
                                     <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500 mb-2 border-b border-slate-700 pb-1">
@@ -334,15 +326,17 @@ export default function LivePage({ params }) {
                                             </div>
                                         ))}
                                     </div>
+                                    {/* VISUALIZZAZIONE NOTA ATLETA */}
                                     {logData.notes && (
-                                        <div className="mt-2 pt-2 border-t border-slate-800 text-xs text-slate-400 text-left">
-                                            <span className="text-[9px] uppercase font-bold text-slate-500">Tua Nota:</span> {logData.notes}
+                                        <div className="mt-2 pt-2 border-t border-slate-800 text-xs text-slate-400 text-left flex gap-2">
+                                            <MessageSquare size={14} className="shrink-0 text-slate-500"/>
+                                            <span>{logData.notes}</span>
                                         </div>
                                     )}
                                 </div>
                             )}
 
-                            {/* STORICO (Se non fatto) */}
+                            {/* STORICO */}
                             {history && !isDone && (
                                 <div className="w-full bg-slate-900/30 p-2 rounded border border-slate-800/50 mb-3">
                                     <div className="text-[10px] text-slate-500 uppercase font-bold flex justify-center items-center gap-1 mb-1"><History size={10}/> Settimana Scorsa</div>
@@ -352,16 +346,12 @@ export default function LivePage({ params }) {
                                 </div>
                             )}
 
-                            {/* BOTTONE PRINCIPALE: INSERISCI o MODIFICA */}
+                            {/* BOTTONE APRI / MODIFICA */}
                             <button 
                                 onClick={() => openEdit(ex.name, logData)}
-                                className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all active:scale-95 gap-2 mt-auto shadow-lg ${
-                                    isDone 
-                                    ? 'bg-slate-700 border border-slate-600 text-white hover:bg-slate-600' // Stile Tasto Modifica
-                                    : 'bg-blue-600 text-white hover:bg-blue-500' // Stile Tasto Inserisci
-                                }`}
+                                className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all active:scale-95 gap-2 mt-auto shadow-lg bg-blue-600 text-white hover:bg-blue-500`}
                             >
-                                {isDone ? <><Edit2 size={16}/> MODIFICA DATI</> : <><Plus size={20}/> INSERISCI DATI</>}
+                                {isDone ? <><Edit2 size={18}/> APRI / MODIFICA</> : <><Plus size={20}/> INSERISCI DATI</>}
                             </button>
                         </div>
                     )}
