@@ -494,7 +494,7 @@ export default function LivePage({ params }) {
                         : "bg-blue-600 text-white hover:bg-blue-500"
                     }`}
                   >
-                    <Plus size={20} /> INSERISCI DATI
+                    <Plus size={20} /> SALVA PESI/REP
                   </button>
                 </div>
               )}
