@@ -3,12 +3,12 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect, use } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Info, Check, Plus, X, History, Edit2, Trash2 } from "lucide-react";
+import { Info, Check, Plus, X, History, Trash2 } from "lucide-react";
 
 export default function LivePage({ params }) {
   const { id } = use(params);
 
-  // ⚠️ Nota: meglio spostare queste chiavi in env (NEXT_PUBLIC_*)
+  // ⚠️ Sposta in env NEXT_PUBLIC_* quando puoi
   const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
   const supabaseKey =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
@@ -57,7 +57,6 @@ export default function LivePage({ params }) {
       const uniqueDays = [...new Set(ex.map((item) => item.day || "Giorno A"))].sort();
       setAvailableDays(uniqueDays);
 
-      // se non è ancora impostato il giorno, usa il primo disponibile
       if (!activeDay) setActiveDay(uniqueDays[0]);
 
       // LOG ATTUALI
@@ -125,7 +124,7 @@ export default function LivePage({ params }) {
     setNoteInput("");
   };
 
-  // ✅ update "funzionale" (evita bug di stato)
+  // ✅ update funzionale (evita bug)
   const updateRow = (index, field, value) => {
     setSetLogsData((prev) => {
       const copy = [...prev];
@@ -134,16 +133,17 @@ export default function LivePage({ params }) {
     });
   };
 
-  // ✅ add "funzionale"
+  // ✅ add funzionale
   const addSetRow = () => {
     setSetLogsData((prev) => [...prev, { reps: "", weight: "" }]);
   };
 
-  // ✅ se rimane una sola riga, la svuoti invece di eliminarla
+  // ✅ elimina DAVVERO la serie anche se è l’unica.
+  // Se rimani a 0 righe, ricrea 1 riga vuota per non rompere la UI.
   const removeSetRow = (index) => {
     setSetLogsData((prev) => {
-      if (prev.length === 1) return [{ reps: "", weight: "" }];
-      return prev.filter((_, i) => i !== index);
+      const next = prev.filter((_, i) => i !== index);
+      return next.length === 0 ? [{ reps: "", weight: "" }] : next;
     });
   };
 
@@ -163,7 +163,7 @@ export default function LivePage({ params }) {
     const repsString = setLogsData.map((r) => r.reps).join("-");
     const weightString = setLogsData.map((r) => r.weight).join("-");
 
-    // Delete + Insert (come facevi tu) ma mantenuto pulito
+    // Delete + Insert (semplice e robusto)
     await supabase
       .from("workout_logs")
       .delete()
@@ -208,7 +208,7 @@ export default function LivePage({ params }) {
     }
   };
 
-  // ✅ ELIMINA LOG SALVATO (cancella “tutta la serie inserita”)
+  // ✅ elimina log salvato (tutto esercizio del giorno)
   const deleteLog = async (ex) => {
     const key = `${ex.name}_${activeDay}`;
 
@@ -311,7 +311,7 @@ export default function LivePage({ params }) {
                 isDone ? "bg-green-900/10 border-green-800/30" : "bg-slate-800 border-slate-700"
               }`}
             >
-              {/* --- POP-UP EDITING COMPATTO --- */}
+              {/* --- POP-UP EDITING --- */}
               {isEditing ? (
                 <div className="p-4 bg-slate-800 animate-in fade-in zoom-in-95 duration-200">
                   <div className="flex justify-between items-center mb-4">
@@ -321,6 +321,7 @@ export default function LivePage({ params }) {
                         Target: {weekData.sets} x {weekData.reps}
                       </p>
                     </div>
+
                     <button
                       onClick={closeEdit}
                       className="p-2 bg-slate-700 rounded-full text-slate-400 hover:text-white"
@@ -329,22 +330,17 @@ export default function LivePage({ params }) {
                     </button>
                   </div>
 
-                  {/* INTESTAZIONE TABELLA */}
+                  {/* INTESTAZIONE */}
                   <div className="flex text-[10px] uppercase font-bold text-slate-500 mb-2 px-1">
-                    <span className="w-6 text-center">#</span>
                     <span className="flex-1 text-center">Reps</span>
                     <span className="flex-1 text-center">Kg</span>
-                    <span className="w-6"></span>
+                    <span className="w-8"></span>
                   </div>
 
-                  {/* INPUT PIÙ PICCOLI */}
+                  {/* RIGHE SERIE: SENZA NUMERI + X a destra */}
                   <div className="space-y-2 mb-4">
                     {setLogsData.map((row, i) => (
                       <div key={i} className="flex gap-2 items-center">
-                        <div className="w-6 text-slate-500 font-bold text-center text-xs">
-                          {i + 1}
-                        </div>
-
                         <input
                           type="number"
                           placeholder={weekData.reps}
@@ -363,10 +359,10 @@ export default function LivePage({ params }) {
 
                         <button
                           onClick={() => removeSetRow(i)}
-                          className="w-6 h-7 flex items-center justify-center text-slate-600 hover:text-red-400 transition"
-                          title="Rimuovi riga"
+                          className="w-7 h-7 flex items-center justify-center rounded bg-slate-700 text-slate-300 hover:bg-red-900/40 hover:text-red-300 transition"
+                          title="Elimina serie"
                         >
-                          <Trash2 size={14} />
+                          <X size={14} />
                         </button>
                       </div>
                     ))}
@@ -386,7 +382,7 @@ export default function LivePage({ params }) {
                         onClick={() => deleteLog(ex)}
                         className="py-2 px-3 rounded border border-red-700/50 text-red-300 text-xs font-bold hover:bg-red-900/20 transition flex items-center justify-center gap-1"
                       >
-                        <Trash2 size={14} /> ELIMINA
+                        <Trash2 size={14} /> ELIMINA LOG
                       </button>
                     )}
                   </div>
@@ -412,7 +408,7 @@ export default function LivePage({ params }) {
                   </button>
                 </div>
               ) : (
-                // --- CARD CHIUSA (VISUALIZZAZIONE) ---
+                // --- CARD CHIUSA ---
                 <div className="p-5 flex flex-col items-center text-center">
                   <h3 className={`text-xl font-bold mb-2 ${isDone ? "text-green-400" : "text-white"}`}>
                     {ex.name}
@@ -466,7 +462,6 @@ export default function LivePage({ params }) {
                         ))}
                       </div>
 
-                      {/* ✅ FIX: la nota vera è athlete_notes (non notes) */}
                       {logData?.athlete_notes && (
                         <div className="mt-2 pt-2 border-t border-slate-800 text-xs text-slate-400 text-left">
                           <span className="text-[9px] uppercase font-bold text-slate-500">
@@ -490,7 +485,7 @@ export default function LivePage({ params }) {
                     </div>
                   )}
 
-                  {/* ✅ vuoi sempre il "+" dopo il salvataggio: testo fisso */}
+                  {/* Sempre + */}
                   <button
                     onClick={() => openEdit(ex.name, logData)}
                     className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all active:scale-95 gap-2 mt-auto shadow-lg ${
