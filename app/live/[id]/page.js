@@ -3,18 +3,18 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect, use } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Info, Check, Plus, X, History, Trash2 } from "lucide-react";
+import { Info, Check, Plus, X, History, Trash2, Dumbbell, User } from "lucide-react";
 
 export default function LivePage({ params }) {
   const { id } = use(params);
 
-  // ⚠️ Sposta in env NEXT_PUBLIC_* quando puoi
   const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
   const supabaseKey =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   const [program, setProgram] = useState(null);
+  const [clientName, setClientName] = useState(""); 
   const [exercises, setExercises] = useState([]);
   const [logs, setLogs] = useState({});
   const [historyLogs, setHistoryLogs] = useState({});
@@ -31,20 +31,33 @@ export default function LivePage({ params }) {
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, activeWeek]);
 
   const fetchData = async () => {
     setLoading(true);
 
+    // 1. Carica Scheda E IL NOME DEL COACH (coach_name)
     const { data: prog } = await supabase
       .from("programs")
-      .select("*")
+      .select("*") // Seleziona tutto, incluso coach_name che abbiamo appena creato
       .eq("id", id)
       .single();
 
-    if (prog) setProgram(prog);
+    if (prog) {
+      setProgram(prog);
+      
+      // 2. Carica Nome Atleta
+      if (prog.client_id) {
+        const { data: client } = await supabase
+            .from('clients')
+            .select('name')
+            .eq('id', prog.client_id)
+            .single();
+        if (client) setClientName(client.name);
+      }
+    }
 
+    // 3. Carica Esercizi
     const { data: ex } = await supabase
       .from("exercises")
       .select("*")
@@ -70,12 +83,12 @@ export default function LivePage({ params }) {
       if (savedLogs) {
         savedLogs.forEach((log) => {
           const key = `${log.exercise_name}_${log.day_label}`;
-          logsMap[key] = log;
+          logsMap[key] = { ...log, notes: log.athlete_notes };
         });
       }
       setLogs(logsMap);
 
-      // STORICO (settimana precedente)
+      // STORICO
       if (activeWeek > 1) {
         const { data: history } = await supabase
           .from("workout_logs")
@@ -109,7 +122,7 @@ export default function LivePage({ params }) {
   const openEdit = (exName, existingData) => {
     const key = `${exName}_${activeDay}`;
     setEditingId(key);
-    setNoteInput(existingData?.athlete_notes || "");
+    setNoteInput(existingData?.notes || "");
 
     if (existingData) {
       setSetLogsData(parseSetData(existingData.actual_reps, existingData.actual_weight));
@@ -124,7 +137,6 @@ export default function LivePage({ params }) {
     setNoteInput("");
   };
 
-  // ✅ update funzionale (evita bug)
   const updateRow = (index, field, value) => {
     setSetLogsData((prev) => {
       const copy = [...prev];
@@ -133,22 +145,15 @@ export default function LivePage({ params }) {
     });
   };
 
-  // ✅ add funzionale
   const addSetRow = () => {
     setSetLogsData((prev) => [...prev, { reps: "", weight: "" }]);
   };
 
-  // ✅ elimina DAVVERO la serie anche se è l’unica.
-  // Se rimani a 0 righe, ricrea 1 riga vuota per non rompere la UI.
   const removeSetRow = (index) => {
-    setSetLogsData((prev) => {
-      const next = prev.filter((_, i) => i !== index);
-      return next.length === 0 ? [{ reps: "", weight: "" }] : next;
-    });
+    setSetLogsData((prev) => prev.filter((_, i) => i !== index));
   };
 
   const saveLog = async (ex) => {
-    // VALIDAZIONE: Blocca se 0 o vuoto
     for (let i = 0; i < setLogsData.length; i++) {
       const row = setLogsData[i];
       const r = parseFloat(row.reps);
@@ -163,7 +168,6 @@ export default function LivePage({ params }) {
     const repsString = setLogsData.map((r) => r.reps).join("-");
     const weightString = setLogsData.map((r) => r.weight).join("-");
 
-    // Delete + Insert (semplice e robusto)
     await supabase
       .from("workout_logs")
       .delete()
@@ -193,7 +197,7 @@ export default function LivePage({ params }) {
           ...prev[key],
           actual_reps: repsString,
           actual_weight: weightString,
-          athlete_notes: noteInput,
+          notes: noteInput,
           actual_sets: String(setLogsData.length),
           completed: true,
           exercise_name: ex.name,
@@ -208,7 +212,6 @@ export default function LivePage({ params }) {
     }
   };
 
-  // ✅ elimina log salvato (tutto esercizio del giorno)
   const deleteLog = async (ex) => {
     const key = `${ex.name}_${activeDay}`;
 
@@ -248,18 +251,40 @@ export default function LivePage({ params }) {
       {/* HEADER */}
       <div className="bg-slate-800/90 backdrop-blur sticky top-0 z-20 border-b border-slate-700 shadow-xl pt-4">
         <div className="px-4 max-w-md mx-auto">
-          <h1 className="text-xl font-bold text-white mb-2">{program?.title || ""}</h1>
+          
+          {/* HEADER: COACH (Dal DB) + NOME SCHEDA + ATLETA */}
+          <div className="flex justify-between items-end mb-4">
+            <div>
+                 {/* Qui usiamo program.coach_name invece della costante */}
+                 <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-0.5 flex items-center gap-1">
+                    <Dumbbell size={10} /> {program?.coach_name || "COACH"}
+                 </div>
+                 <h1 className="text-2xl font-bold text-white leading-none">{program?.title}</h1>
+            </div>
+            {clientName && (
+                <div className="text-right">
+                    <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">ATLETA</div>
+                    <div className="text-sm font-bold text-slate-200 flex items-center gap-1 justify-end">
+                        {clientName} <User size={12}/>
+                    </div>
+                </div>
+            )}
+          </div>
 
+          {/* SELETTORE SETTIMANE (W1, W2...) */}
           <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar">
             {Array.from({ length: program?.duration || 1 }, (_, i) => i + 1).map((week) => (
               <button
                 key={week}
                 onClick={() => setActiveWeek(week)}
-                className={`min-w-[40px] h-[40px] rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-                  activeWeek === week ? "bg-blue-600 text-white" : "bg-slate-700 text-slate-400"
+                className={`min-w-[45px] h-[45px] rounded-xl flex flex-col items-center justify-center border transition-all ${
+                  activeWeek === week
+                    ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/40 scale-105"
+                    : "bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700"
                 }`}
               >
-                {week}
+                <span className="text-[9px] font-bold opacity-60 leading-none">W</span>
+                <span className="text-lg font-bold leading-none">{week}</span>
               </button>
             ))}
           </div>
@@ -330,14 +355,12 @@ export default function LivePage({ params }) {
                     </button>
                   </div>
 
-                  {/* INTESTAZIONE */}
                   <div className="flex text-[10px] uppercase font-bold text-slate-500 mb-2 px-1">
                     <span className="flex-1 text-center">Reps</span>
                     <span className="flex-1 text-center">Kg</span>
                     <span className="w-8"></span>
                   </div>
 
-                  {/* RIGHE SERIE: SENZA NUMERI + X a destra */}
                   <div className="space-y-2 mb-4">
                     {setLogsData.map((row, i) => (
                       <div key={i} className="flex gap-2 items-center">
@@ -368,7 +391,6 @@ export default function LivePage({ params }) {
                     ))}
                   </div>
 
-                  {/* BOTTONI AZIONE */}
                   <div className="flex gap-2 mb-4">
                     <button
                       onClick={addSetRow}
@@ -462,12 +484,12 @@ export default function LivePage({ params }) {
                         ))}
                       </div>
 
-                      {logData?.athlete_notes && (
+                      {logData?.notes && (
                         <div className="mt-2 pt-2 border-t border-slate-800 text-xs text-slate-400 text-left">
                           <span className="text-[9px] uppercase font-bold text-slate-500">
                             Tua Nota:
                           </span>{" "}
-                          {logData.athlete_notes}
+                          {logData.notes}
                         </div>
                       )}
                     </div>
@@ -485,7 +507,6 @@ export default function LivePage({ params }) {
                     </div>
                   )}
 
-                  {/* Sempre + */}
                   <button
                     onClick={() => openEdit(ex.name, logData)}
                     className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all active:scale-95 gap-2 mt-auto shadow-lg ${
@@ -494,7 +515,7 @@ export default function LivePage({ params }) {
                         : "bg-blue-600 text-white hover:bg-blue-500"
                     }`}
                   >
-                    <Plus size={20} /> SALVA PESI/REP
+                    {isDone ? <><Edit2 size={18}/> APRI / MODIFICA</> : <><Plus size={20}/> INSERISCI DATI</>}
                   </button>
                 </div>
               )}
