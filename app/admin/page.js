@@ -1,4 +1,7 @@
 "use client";
+// 1. FORZIAMO LA MODALITÀ DINAMICA (Risolve errore Prerender)
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
@@ -9,6 +12,8 @@ export default function AdminDashboard() {
   
   const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
   const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
+  
+  // Qui usiamo createClient di Supabase
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   const [clients, setClients] = useState([]);
@@ -22,7 +27,8 @@ export default function AdminDashboard() {
     if (data) setClients(data);
   };
 
-  const createClient = async () => {
+  // 2. RINOMINATA LA FUNZIONE (Era 'createClient', creava conflitto!)
+  const createNewAthlete = async () => {
     const name = prompt("Nome del nuovo atleta:");
     if (!name) return;
 
@@ -69,7 +75,7 @@ export default function AdminDashboard() {
 
         {/* FAB (Floating Action Button) */}
         <button 
-            onClick={createClient}
+            onClick={createNewAthlete} // Usa la nuova funzione rinominata
             className="fixed bottom-8 right-8 bg-blue-600 text-white w-16 h-16 rounded-full shadow-2xl flex items-center justify-center hover:scale-110 hover:bg-blue-500 transition-all"
         >
             <Plus size={32}/>
