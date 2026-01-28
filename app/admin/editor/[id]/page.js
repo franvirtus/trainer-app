@@ -18,7 +18,7 @@ export default function EditorPage() {
   const [program, setProgram] = useState(null);
   const [exercises, setExercises] = useState([]);
   const [saving, setSaving] = useState(false);
-  const [exerciseLibrary, setExerciseLibrary] = useState([]); // Libreria per suggerimenti
+  const [exerciseLibrary, setExerciseLibrary] = useState([]);
   
   const [activeDay, setActiveDay] = useState('Giorno A');
   const [days, setDays] = useState(['Giorno A']);
@@ -43,7 +43,6 @@ export default function EditorPage() {
     const { data: ex } = await supabase.from('exercises').select('*').eq('program_id', id).order('created_at', { ascending: true });
     
     if (ex && ex.length > 0) {
-        // Normalizzazione dati
         const normalizedEx = ex.map(e => {
             if (!e.progression || Object.keys(e.progression).length === 0) {
                 const defaultProg = {};
@@ -100,18 +99,25 @@ export default function EditorPage() {
       setExercises(exercises.map(e => (e === exToUpdate ? { ...e, notes: val } : e)));
   };
 
-  // --- RINOMINA GIORNO ---
+  // FUNZIONE 1: RINOMINA GIORNO
   const renameDay = () => {
       const newName = prompt(`Rinomina "${activeDay}" in:`, activeDay);
       if(!newName || newName === activeDay) return;
-
-      // Aggiorna la lista dei giorni
       setDays(days.map(d => d === activeDay ? newName : d));
-      
-      // Aggiorna tutti gli esercizi di quel giorno
       setExercises(exercises.map(e => (e.day || 'Giorno A') === activeDay ? { ...e, day: newName } : e));
-      
       setActiveDay(newName);
+  };
+
+  // FUNZIONE 2: RINOMINA SCHEDA (NUOVA)
+  const renameProgram = async () => {
+      const newTitle = prompt("Nuovo nome della scheda:", program.title);
+      if(!newTitle || newTitle === program.title) return;
+
+      // Aggiorna UI subito
+      setProgram({ ...program, title: newTitle });
+
+      // Aggiorna DB silenziosamente
+      await supabase.from('programs').update({ title: newTitle }).eq('id', id);
   };
 
   const copyCurrentWeekToAll = () => {
@@ -186,7 +192,10 @@ export default function EditorPage() {
           <div className="flex items-center gap-4">
               <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-full"><ArrowLeft size={20}/></button>
               <div>
-                  <h1 className="text-xl font-bold text-slate-800">{program.title}</h1>
+                  {/* TITOLO CLICCABILE PER RINOMINARE (NUOVO) */}
+                  <h1 onClick={renameProgram} className="text-xl font-bold text-slate-800 flex items-center gap-2 cursor-pointer hover:text-blue-600 transition" title="Clicca per rinominare">
+                      {program.title} <Edit3 size={16} className="text-slate-400"/>
+                  </h1>
                   <p className="text-xs text-slate-500 font-bold uppercase">{program.duration} SETTIMANE</p>
               </div>
           </div>
@@ -206,7 +215,8 @@ export default function EditorPage() {
                         className={`px-5 py-2 rounded-lg font-bold text-sm transition flex items-center gap-2 ${activeDay === day ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200'}`}
                     >
                         {day}
-                        {activeDay === day && <Edit3 size={12} className="opacity-70" onClick={(e) => { e.stopPropagation(); renameDay(); }} />}
+                        {/* ICONA MATITA PER RINOMINARE GIORNO */}
+                        {activeDay === day && <Edit3 size={12} className="opacity-70 cursor-pointer hover:text-yellow-300" onClick={(e) => { e.stopPropagation(); renameDay(); }} />}
                     </button>
                 </div>
             ))}
@@ -247,13 +257,12 @@ export default function EditorPage() {
                                 <label className="text-[10px] font-bold text-slate-400 uppercase">Esercizio *</label>
                                 <input 
                                     type="text" 
-                                    list={`list-${idx}`} // Collega al datalist
+                                    list={`list-${idx}`} 
                                     className={`w-full text-lg font-bold bg-transparent outline-none border-b ${!ex.name ? 'border-red-300 bg-red-50' : 'border-transparent'}`}
                                     placeholder="Es. Squat (Inizia a scrivere...)"
                                     value={ex.name}
                                     onChange={(e) => updateExerciseName(ex, e.target.value)}
                                 />
-                                {/* SUGGERIMENTI */}
                                 <datalist id={`list-${idx}`}>
                                     {exerciseLibrary.map((name, i) => <option key={i} value={name} />)}
                                 </datalist>
