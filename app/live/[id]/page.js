@@ -3,7 +3,6 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect, use } from "react";
 import { createClient } from "@supabase/supabase-js";
-// Aggiunto Edit2 e Activity agli import
 import { Info, Check, Plus, X, History, Trash2, Dumbbell, User, Edit2, Activity } from "lucide-react";
 
 export default function LivePage({ params }) {
@@ -37,7 +36,6 @@ export default function LivePage({ params }) {
   const fetchData = async () => {
     setLoading(true);
 
-    // 1. Carica Scheda E IL NOME DEL COACH
     const { data: prog } = await supabase
       .from("programs")
       .select("*")
@@ -47,7 +45,6 @@ export default function LivePage({ params }) {
     if (prog) {
       setProgram(prog);
       
-      // 2. Carica Nome Atleta
       if (prog.client_id) {
         const { data: client } = await supabase
             .from('clients')
@@ -58,7 +55,6 @@ export default function LivePage({ params }) {
       }
     }
 
-    // 3. Carica Esercizi
     const { data: ex } = await supabase
       .from("exercises")
       .select("*")
@@ -73,7 +69,6 @@ export default function LivePage({ params }) {
 
       if (!activeDay) setActiveDay(uniqueDays[0]);
 
-      // LOG ATTUALI
       const { data: savedLogs } = await supabase
         .from("workout_logs")
         .select("*")
@@ -89,7 +84,6 @@ export default function LivePage({ params }) {
       }
       setLogs(logsMap);
 
-      // STORICO
       if (activeWeek > 1) {
         const { data: history } = await supabase
           .from("workout_logs")
@@ -249,11 +243,9 @@ export default function LivePage({ params }) {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-32">
-      {/* HEADER */}
       <div className="bg-slate-800/90 backdrop-blur sticky top-0 z-20 border-b border-slate-700 shadow-xl pt-4">
         <div className="px-4 max-w-md mx-auto">
           
-          {/* HEADER: COACH + NOME SCHEDA + ATLETA */}
           <div className="flex justify-between items-end mb-4">
             <div>
                  <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-0.5 flex items-center gap-1">
@@ -271,7 +263,6 @@ export default function LivePage({ params }) {
             )}
           </div>
 
-          {/* SELETTORE SETTIMANE */}
           <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar">
             {Array.from({ length: program?.duration || 1 }, (_, i) => i + 1).map((week) => (
               <button
@@ -336,7 +327,6 @@ export default function LivePage({ params }) {
                 isDone ? "bg-green-900/10 border-green-800/30" : "bg-slate-800 border-slate-700"
               }`}
             >
-              {/* --- POP-UP EDITING --- */}
               {isEditing ? (
                 <div className="p-4 bg-slate-800 animate-in fade-in zoom-in-95 duration-200">
                   <div className="flex justify-between items-center mb-4">
@@ -364,24 +354,24 @@ export default function LivePage({ params }) {
                   <div className="space-y-2 mb-4">
                     {setLogsData.map((row, i) => (
                       <div key={i} className="flex gap-2 items-center">
-                        {/* INPUT REPS MODIFICATO */}
+                        {/* INPUT REPS COMPATTO */}
                         <input
                           type="text"
                           inputMode="decimal"
                           placeholder={weekData.reps}
                           value={row.reps}
                           onChange={(e) => updateRow(i, "reps", e.target.value)}
-                          className="flex-1 h-10 bg-slate-950 border border-slate-700 rounded text-center text-white font-bold text-lg outline-none focus:border-blue-500 transition-all placeholder:text-slate-700"
+                          className="flex-1 h-8 bg-slate-950 border border-slate-700 rounded text-center text-white font-bold text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-700"
                         />
 
-                        {/* INPUT KG MODIFICATO */}
+                        {/* INPUT KG COMPATTO */}
                         <input
                           type="text"
                           inputMode="decimal"
                           placeholder={weekData.weight || "-"}
                           value={row.weight}
                           onChange={(e) => updateRow(i, "weight", e.target.value)}
-                          className="flex-1 h-10 bg-slate-950 border border-slate-700 rounded text-center text-yellow-400 font-bold text-lg outline-none focus:border-blue-500 transition-all placeholder:text-slate-700"
+                          className="flex-1 h-8 bg-slate-950 border border-slate-700 rounded text-center text-yellow-400 font-bold text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-700"
                         />
 
                         <button
@@ -433,10 +423,8 @@ export default function LivePage({ params }) {
                   </button>
                 </div>
               ) : (
-                // --- CARD CHIUSA ---
                 <div className="flex flex-col">
                   
-                  {/* Intestazione */}
                   <div className="p-5 border-b border-slate-700/50 bg-slate-800/40">
                       <h3 className={`text-xl font-bold capitalize mb-1 ${isDone ? "text-green-400" : "text-white"}`}>
                         {ex.name}
@@ -448,10 +436,7 @@ export default function LivePage({ params }) {
                       )}
                   </div>
 
-                  {/* GRIGLIA DATI (CHIARA) */}
                   <div className="grid grid-cols-4 divide-x divide-slate-700/50 bg-slate-800/20 border-b border-slate-700/50">
-                            
-                        {/* SERIE x REPS */}
                         <div className="p-3 text-center">
                             <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Serie</span>
                             <div className="text-white font-bold text-sm">
@@ -459,7 +444,6 @@ export default function LivePage({ params }) {
                             </div>
                         </div>
 
-                        {/* CARICO (KG) */}
                         <div className="p-3 text-center">
                             <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Carico</span>
                             <div className="text-yellow-400 font-bold text-sm">
@@ -467,7 +451,6 @@ export default function LivePage({ params }) {
                             </div>
                         </div>
 
-                        {/* RPE (INTENSITÀ) */}
                         <div className="p-3 text-center">
                             <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">RPE</span>
                             <div className="text-orange-400 font-bold text-sm">
@@ -475,7 +458,6 @@ export default function LivePage({ params }) {
                             </div>
                         </div>
 
-                        {/* RECUPERO */}
                         <div className="p-3 text-center">
                             <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Recupero</span>
                             <div className="text-blue-400 font-bold text-sm">
@@ -484,7 +466,6 @@ export default function LivePage({ params }) {
                         </div>
                   </div>
 
-                  {/* SEZIONE "COMPLETATO" (Se esiste) */}
                   {isDone && (
                     <div className="bg-green-900/10 p-4">
                       <div className="flex justify-between text-[10px] uppercase font-bold text-green-700/70 mb-2 border-b border-green-800/30 pb-1">
@@ -510,7 +491,6 @@ export default function LivePage({ params }) {
                     </div>
                   )}
 
-                  {/* STORICO (Settimana scorsa) */}
                   {history && !isDone && (
                     <div className="bg-slate-900/40 p-3 border-t border-slate-800/50 flex items-center justify-between text-xs px-5">
                          <span className="text-slate-500 font-bold flex items-center gap-1">
@@ -522,7 +502,6 @@ export default function LivePage({ params }) {
                     </div>
                   )}
 
-                  {/* BOTTONE AZIONE */}
                   <div className="p-3">
                     <button
                         onClick={() => openEdit(ex.name, logData)}
