@@ -3,7 +3,18 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect, use } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Info, Check, Plus, X, History, Trash2, Dumbbell, User, Edit2, Activity } from "lucide-react";
+import {
+  Info,
+  Check,
+  Plus,
+  X,
+  History,
+  Trash2,
+  Dumbbell,
+  User,
+  Edit2,
+  Activity,
+} from "lucide-react";
 
 export default function LivePage({ params }) {
   const { id } = use(params);
@@ -14,7 +25,7 @@ export default function LivePage({ params }) {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   const [program, setProgram] = useState(null);
-  const [clientName, setClientName] = useState(""); 
+  const [clientName, setClientName] = useState("");
   const [exercises, setExercises] = useState([]);
   const [logs, setLogs] = useState({});
   const [historyLogs, setHistoryLogs] = useState({});
@@ -31,6 +42,7 @@ export default function LivePage({ params }) {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, activeWeek]);
 
   const fetchData = async () => {
@@ -44,14 +56,16 @@ export default function LivePage({ params }) {
 
     if (prog) {
       setProgram(prog);
-      
+
       if (prog.client_id) {
+        // ✅ DB: clients ha full_name, non name
         const { data: client } = await supabase
-            .from('clients')
-            .select('name')
-            .eq('id', prog.client_id)
-            .single();
-        if (client) setClientName(client.name);
+          .from("clients")
+          .select("full_name")
+          .eq("id", prog.client_id)
+          .single();
+
+        if (client) setClientName(client.full_name || "");
       }
     }
 
@@ -245,21 +259,23 @@ export default function LivePage({ params }) {
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-32">
       <div className="bg-slate-800/90 backdrop-blur sticky top-0 z-20 border-b border-slate-700 shadow-xl pt-4">
         <div className="px-4 max-w-md mx-auto">
-          
           <div className="flex justify-between items-end mb-4">
             <div>
-                 <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-0.5 flex items-center gap-1">
-                    <Dumbbell size={10} /> {program?.coach_name || "COACH"}
-                 </div>
-                 <h1 className="text-2xl font-bold text-white leading-none">{program?.title}</h1>
+              <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-0.5 flex items-center gap-1">
+                <Dumbbell size={10} /> {program?.coach_name || "COACH"}
+              </div>
+              <h1 className="text-2xl font-bold text-white leading-none">{program?.title}</h1>
             </div>
+
             {clientName && (
-                <div className="text-right">
-                    <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">ATLETA</div>
-                    <div className="text-sm font-bold text-slate-200 flex items-center gap-1 justify-end">
-                        {clientName} <User size={12}/>
-                    </div>
+              <div className="text-right">
+                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
+                  ATLETA
                 </div>
+                <div className="text-sm font-bold text-slate-200 flex items-center gap-1 justify-end">
+                  {clientName} <User size={12} />
+                </div>
+              </div>
             )}
           </div>
 
@@ -351,32 +367,32 @@ export default function LivePage({ params }) {
                     <span className="w-8"></span>
                   </div>
 
+                  {/* ✅ INPUT PIÙ PICCOLI: niente flex-1, larghezze fisse */}
                   <div className="space-y-2 mb-4">
                     {setLogsData.map((row, i) => (
-                      <div key={i} className="flex gap-2 items-center">
-                        {/* INPUT REPS COMPATTO */}
+                      <div key={i} className="flex gap-2 items-center justify-center">
                         <input
                           type="text"
                           inputMode="decimal"
                           placeholder={weekData.reps}
                           value={row.reps}
                           onChange={(e) => updateRow(i, "reps", e.target.value)}
-                          className="flex-1 h-8 bg-slate-950 border border-slate-700 rounded text-center text-white font-bold text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-700"
+                          className="w-24 h-9 bg-slate-950 border border-slate-700 rounded-md text-center text-white font-bold text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-700"
                         />
 
-                        {/* INPUT KG COMPATTO */}
                         <input
                           type="text"
                           inputMode="decimal"
                           placeholder={weekData.weight || "-"}
                           value={row.weight}
                           onChange={(e) => updateRow(i, "weight", e.target.value)}
-                          className="flex-1 h-8 bg-slate-950 border border-slate-700 rounded text-center text-yellow-400 font-bold text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-700"
+                          className="w-28 h-9 bg-slate-950 border border-slate-700 rounded-md text-center text-yellow-400 font-bold text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-700"
                         />
 
                         <button
                           onClick={() => removeSetRow(i)}
-                          className="w-7 h-7 flex items-center justify-center rounded bg-slate-700 text-slate-300 hover:bg-red-900/40 hover:text-red-300 transition"
+                          className="w-8 h-8 flex items-center justify-center rounded-md bg-slate-700 text-slate-300 hover:bg-red-900/40 hover:text-red-300 transition"
+                          aria-label="Rimuovi serie"
                         >
                           <X size={14} />
                         </button>
@@ -424,46 +440,42 @@ export default function LivePage({ params }) {
                 </div>
               ) : (
                 <div className="flex flex-col">
-                  
                   <div className="p-5 border-b border-slate-700/50 bg-slate-800/40">
-                      <h3 className={`text-xl font-bold capitalize mb-1 ${isDone ? "text-green-400" : "text-white"}`}>
-                        {ex.name}
-                      </h3>
-                      {weekData.note && (
-                        <div className="text-xs text-slate-400 flex items-center gap-1 mt-1">
-                             <Info size={12}/> {weekData.note}
-                        </div>
-                      )}
+                    <h3 className={`text-xl font-bold capitalize mb-1 ${isDone ? "text-green-400" : "text-white"}`}>
+                      {ex.name}
+                    </h3>
+                    {weekData.note && (
+                      <div className="text-xs text-slate-400 flex items-center gap-1 mt-1">
+                        <Info size={12} /> {weekData.note}
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-4 divide-x divide-slate-700/50 bg-slate-800/20 border-b border-slate-700/50">
-                        <div className="p-3 text-center">
-                            <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Serie</span>
-                            <div className="text-white font-bold text-sm">
-                                {weekData.sets} <span className="text-slate-500">x</span> {weekData.reps}
-                            </div>
-                        </div>
+                    <div className="p-3 text-center">
+                      <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Serie</span>
+                      <div className="text-white font-bold text-sm">
+                        {weekData.sets} <span className="text-slate-500">x</span> {weekData.reps}
+                      </div>
+                    </div>
 
-                        <div className="p-3 text-center">
-                            <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Carico</span>
-                            <div className="text-yellow-400 font-bold text-sm">
-                                {weekData.weight ? `${weekData.weight}` : '-'} <span className="text-[10px] text-yellow-600">Kg</span>
-                            </div>
-                        </div>
+                    <div className="p-3 text-center">
+                      <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Carico</span>
+                      <div className="text-yellow-400 font-bold text-sm">
+                        {weekData.weight ? `${weekData.weight}` : "-"}{" "}
+                        <span className="text-[10px] text-yellow-600">Kg</span>
+                      </div>
+                    </div>
 
-                        <div className="p-3 text-center">
-                            <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">RPE</span>
-                            <div className="text-orange-400 font-bold text-sm">
-                                {weekData.rpe || '-'}
-                            </div>
-                        </div>
+                    <div className="p-3 text-center">
+                      <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">RPE</span>
+                      <div className="text-orange-400 font-bold text-sm">{weekData.rpe || "-"}</div>
+                    </div>
 
-                        <div className="p-3 text-center">
-                            <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Recupero</span>
-                            <div className="text-blue-400 font-bold text-sm">
-                                {weekData.rest || '-'}
-                            </div>
-                        </div>
+                    <div className="p-3 text-center">
+                      <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Recupero</span>
+                      <div className="text-blue-400 font-bold text-sm">{weekData.rest || "-"}</div>
+                    </div>
                   </div>
 
                   {isDone && (
@@ -477,41 +489,52 @@ export default function LivePage({ params }) {
                           <div key={i} className="flex justify-between text-sm font-mono items-center">
                             <span className="text-green-300/60 w-6 font-bold">#{i + 1}</span>
                             <div className="flex gap-4">
-                                <span className="font-bold text-white">{r} reps</span>
-                                <span className="text-green-400 font-bold w-16 text-right">{savedWeight[i] || "-"} Kg</span>
+                              <span className="font-bold text-white">{r} reps</span>
+                              <span className="text-green-400 font-bold w-16 text-right">
+                                {savedWeight[i] || "-"} Kg
+                              </span>
                             </div>
                           </div>
                         ))}
                       </div>
                       {logData?.notes && (
-                         <div className="text-xs text-green-200/60 italic border-t border-green-800/30 pt-2">
-                            "{logData.notes}"
-                         </div>
+                        <div className="text-xs text-green-200/60 italic border-t border-green-800/30 pt-2">
+                          "{logData.notes}"
+                        </div>
                       )}
                     </div>
                   )}
 
                   {history && !isDone && (
                     <div className="bg-slate-900/40 p-3 border-t border-slate-800/50 flex items-center justify-between text-xs px-5">
-                         <span className="text-slate-500 font-bold flex items-center gap-1">
-                             <History size={12}/> Settimana Scorsa
-                         </span>
-                         <span className="text-slate-400 font-mono">
-                             {String(history.actual_reps || "").split("-")[0]} reps @ {String(history.actual_weight || "").split("-")[0]} kg
-                         </span>
+                      <span className="text-slate-500 font-bold flex items-center gap-1">
+                        <History size={12} /> Settimana Scorsa
+                      </span>
+                      <span className="text-slate-400 font-mono">
+                        {String(history.actual_reps || "").split("-")[0]} reps @{" "}
+                        {String(history.actual_weight || "").split("-")[0]} kg
+                      </span>
                     </div>
                   )}
 
                   <div className="p-3">
                     <button
-                        onClick={() => openEdit(ex.name, logData)}
-                        className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all active:scale-95 gap-2 shadow-lg ${
+                      onClick={() => openEdit(ex.name, logData)}
+                      className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all active:scale-95 gap-2 shadow-lg ${
                         isDone
-                            ? "bg-slate-800 border border-slate-700 text-slate-300 hover:text-white"
-                            : "bg-blue-600 text-white hover:bg-blue-500 shadow-blue-900/20"
-                        }`}
+                          ? "bg-slate-800 border border-slate-700 text-slate-300 hover:text-white"
+                          : "bg-blue-600 text-white hover:bg-blue-500 shadow-blue-900/20"
+                      }`}
                     >
-                        {isDone ? <><Edit2 size={16}/> MODIFICA DATI</> : <><Activity size={16}/> INSERISCI RISULTATI</>}
+                      {isDone ? (
+                        <>
+                          <Edit2 size={16} /> MODIFICA DATI
+                        </>
+                      ) : (
+                        <>
+                          <Activity size={16} /> INSERISCI RISULTATI
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
