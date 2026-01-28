@@ -336,7 +336,7 @@ export default function LivePage({ params }) {
                 isDone ? "bg-green-900/10 border-green-800/30" : "bg-slate-800 border-slate-700"
               }`}
             >
-              {/* --- POP-UP EDITING (Resta uguale) --- */}
+              {/* --- POP-UP EDITING --- */}
               {isEditing ? (
                 <div className="p-4 bg-slate-800 animate-in fade-in zoom-in-95 duration-200">
                   <div className="flex justify-between items-center mb-4">
@@ -364,20 +364,24 @@ export default function LivePage({ params }) {
                   <div className="space-y-2 mb-4">
                     {setLogsData.map((row, i) => (
                       <div key={i} className="flex gap-2 items-center">
+                        {/* INPUT REPS MODIFICATO */}
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           placeholder={weekData.reps}
                           value={row.reps}
                           onChange={(e) => updateRow(i, "reps", e.target.value)}
-                          className="flex-1 h-7 bg-slate-900 border border-slate-600 rounded text-center text-white font-bold text-xs outline-none focus:border-blue-500 transition-all placeholder:text-slate-700"
+                          className="flex-1 h-10 bg-slate-950 border border-slate-700 rounded text-center text-white font-bold text-lg outline-none focus:border-blue-500 transition-all placeholder:text-slate-700"
                         />
 
+                        {/* INPUT KG MODIFICATO */}
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           placeholder={weekData.weight || "-"}
                           value={row.weight}
                           onChange={(e) => updateRow(i, "weight", e.target.value)}
-                          className="flex-1 h-7 bg-slate-900 border border-slate-600 rounded text-center text-white font-bold text-xs outline-none focus:border-blue-500 transition-all placeholder:text-slate-700"
+                          className="flex-1 h-10 bg-slate-950 border border-slate-700 rounded text-center text-yellow-400 font-bold text-lg outline-none focus:border-blue-500 transition-all placeholder:text-slate-700"
                         />
 
                         <button
@@ -429,7 +433,7 @@ export default function LivePage({ params }) {
                   </button>
                 </div>
               ) : (
-                // --- CARD CHIUSA (NUOVA VERSIONE CON GRIGLIA) ---
+                // --- CARD CHIUSA ---
                 <div className="flex flex-col">
                   
                   {/* Intestazione */}
