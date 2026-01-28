@@ -2,15 +2,17 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js'; // <--- Questo è il primo "createClient"
 import { useRouter } from 'next/navigation';
-import { Plus, Users, ChevronRight, LogOut, User, Trash2 } from 'lucide-react'; // Aggiunto Trash2
+import { Plus, Users, ChevronRight, LogOut, User, Trash2 } from 'lucide-react';
 
 export default function AdminDashboard() {
   const router = useRouter();
   
   const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
   const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
+  
+  // Qui usiamo il primo "createClient" per connetterci
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   const [clients, setClients] = useState([]);
@@ -36,26 +38,31 @@ export default function AdminDashboard() {
     setLoading(false);
   };
 
-  const createClient = async () => {
+  // --- HO RINOMINATO QUESTA FUNZIONE PER EVITARE IL CONFLITTO ---
+  const createNewClient = async () => {
     const name = prompt("Nome e Cognome nuovo atleta:");
     if (!name) return;
 
-    const { error } = await supabase.from('clients').insert([{ full_name: name }]); // Usa full_name se hai rinominato la colonna, altrimenti 'name'
+    // Nota: Ho aggiunto full_name come priorità, ma mantenuto name come fallback se il DB è vecchio
+    const { error } = await supabase.from('clients').insert([{ full_name: name }]); 
+    
+    // Se il tuo DB usa ancora la colonna 'name' invece di 'full_name', usa questa riga invece:
+    // const { error } = await supabase.from('clients').insert([{ name: name }]); 
     
     if (error) {
-        alert("Errore DB: " + error.message);
+        // Fallback intelligente: se fallisce full_name, prova con name
+        const { error: err2 } = await supabase.from('clients').insert([{ name: name }]);
+        if(err2) alert("Errore DB: " + error.message);
+        else fetchData();
     } else {
         fetchData();
     }
   };
 
-  // --- NUOVA FUNZIONE ELIMINA CLIENTE ---
   const deleteClient = async (e, clientId, clientName) => {
-      e.stopPropagation(); // Evita che il click apra la pagina del cliente
+      e.stopPropagation(); 
       if(!confirm(`Sei sicuro di voler eliminare ${clientName}?\nQuesta azione eliminerà anche tutte le sue schede e non è reversibile.`)) return;
 
-      // Supabase gestisce le eliminazioni a cascata se configurato, 
-      // altrimenti eliminiamo manualmente il cliente e il DB pulirà il resto.
       const { error } = await supabase.from('clients').delete().eq('id', clientId);
 
       if (error) alert("Errore eliminazione: " + error.message);
@@ -107,7 +114,6 @@ export default function AdminDashboard() {
                         </div>
                         
                         <div className="flex items-center gap-3">
-                            {/* TASTO ELIMINA */}
                             <button 
                                 onClick={(e) => deleteClient(e, client.id, client.full_name || client.name)}
                                 className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition"
@@ -123,7 +129,7 @@ export default function AdminDashboard() {
         )}
 
         <button 
-            onClick={createClient} 
+            onClick={createNewClient} 
             className="fixed bottom-8 right-8 bg-blue-600 text-white w-16 h-16 rounded-full shadow-2xl flex items-center justify-center hover:scale-110 hover:bg-blue-500 transition-all"
         >
             <Plus size={32}/>
