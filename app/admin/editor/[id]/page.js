@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Plus, Trash2, GripVertical, Copy, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, GripVertical, Copy, Edit3 } from 'lucide-react';
 
 export default function EditorPage() {
   const params = useParams();
@@ -18,14 +18,23 @@ export default function EditorPage() {
   const [program, setProgram] = useState(null);
   const [exercises, setExercises] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [exerciseLibrary, setExerciseLibrary] = useState([]); // Libreria per suggerimenti
   
   const [activeDay, setActiveDay] = useState('Giorno A');
   const [days, setDays] = useState(['Giorno A']);
-  const [viewWeek, setViewWeek] = useState(1); // QUALE SETTIMANA STAI GUARDANDO
+  const [viewWeek, setViewWeek] = useState(1);
 
   useEffect(() => {
-    if (id) loadData();
+    if (id) {
+        loadData();
+        loadLibrary();
+    }
   }, [id]);
+
+  const loadLibrary = async () => {
+      const { data } = await supabase.from('exercise_library').select('name');
+      if(data) setExerciseLibrary(data.map(e => e.name));
+  };
 
   const loadData = async () => {
     const { data: prog } = await supabase.from('programs').select('*').eq('id', id).single();
@@ -86,8 +95,25 @@ export default function EditorPage() {
       });
       setExercises(updatedExercises);
   };
+  
+  const updateNotes = (exToUpdate, val) => {
+      setExercises(exercises.map(e => (e === exToUpdate ? { ...e, notes: val } : e)));
+  };
 
-  // FUNZIONE: Copia la settimana corrente su TUTTE le altre
+  // --- RINOMINA GIORNO ---
+  const renameDay = () => {
+      const newName = prompt(`Rinomina "${activeDay}" in:`, activeDay);
+      if(!newName || newName === activeDay) return;
+
+      // Aggiorna la lista dei giorni
+      setDays(days.map(d => d === activeDay ? newName : d));
+      
+      // Aggiorna tutti gli esercizi di quel giorno
+      setExercises(exercises.map(e => (e.day || 'Giorno A') === activeDay ? { ...e, day: newName } : e));
+      
+      setActiveDay(newName);
+  };
+
   const copyCurrentWeekToAll = () => {
       if(!confirm(`Vuoi copiare i parametri della Settimana ${viewWeek} su TUTTE le altre settimane per questo giorno?`)) return;
 
@@ -119,7 +145,6 @@ export default function EditorPage() {
   };
 
   const saveAll = async () => {
-    // 1. VALIDAZIONE NOME
     const missingName = exercises.find(ex => !ex.name || ex.name.trim() === '');
     if (missingName) {
         alert("Attenzione: Uno o più esercizi non hanno nome! Inseriscilo prima di salvare.");
@@ -135,7 +160,6 @@ export default function EditorPage() {
         notes: ex.notes,
         day: ex.day || 'Giorno A',
         progression: ex.progression,
-        // Dati di fallback per ricerche semplici
         sets: ex.progression['1']?.sets || '',
         reps: ex.progression['1']?.reps || '',
         weight: ex.progression['1']?.weight || '',
@@ -174,16 +198,22 @@ export default function EditorPage() {
       <div className="max-w-4xl mx-auto">
         
         {/* SELETTORE GIORNO */}
-        <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+        <div className="flex gap-2 mb-4 overflow-x-auto pb-2 items-center">
             {days.map(day => (
-                <button key={day} onClick={() => setActiveDay(day)} className={`px-5 py-2 rounded-lg font-bold text-sm transition ${activeDay === day ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 border border-slate-200'}`}>
-                    {day}
-                </button>
+                <div key={day} className="relative group">
+                    <button 
+                        onClick={() => setActiveDay(day)} 
+                        className={`px-5 py-2 rounded-lg font-bold text-sm transition flex items-center gap-2 ${activeDay === day ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200'}`}
+                    >
+                        {day}
+                        {activeDay === day && <Edit3 size={12} className="opacity-70" onClick={(e) => { e.stopPropagation(); renameDay(); }} />}
+                    </button>
+                </div>
             ))}
-            {days.length < 7 && <button onClick={addNewDay} className="px-3 py-2 rounded-lg border border-dashed border-slate-300 text-slate-400"><Plus size={16}/></button>}
+            {days.length < 7 && <button onClick={addNewDay} className="px-3 py-2 rounded-lg border border-dashed border-slate-300 text-slate-400 hover:bg-white"><Plus size={16}/></button>}
         </div>
 
-        {/* SELETTORE SETTIMANA (UNICA VISTA) */}
+        {/* SELETTORE SETTIMANA */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 mb-6 shadow-sm">
             <div className="flex justify-between items-center mb-3">
                 <span className="text-xs font-bold text-slate-400 uppercase">Stai modificando:</span>
@@ -204,29 +234,34 @@ export default function EditorPage() {
             </div>
         </div>
 
-        {/* LISTA ESERCIZI (SOLO SETTIMANA SELEZIONATA) */}
+        {/* LISTA ESERCIZI */}
         <div className="space-y-4">
             {currentExercises.map((ex, idx) => (
                 <div key={idx} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex gap-4 group">
                     <GripVertical className="text-slate-300 cursor-move mt-2"/>
                     
                     <div className="flex-1 space-y-4">
-                        {/* Riga 1: Nome e Delete */}
-                        <div className="flex gap-3">
+                        {/* Riga 1: Nome con Autocomplete */}
+                        <div className="flex gap-3 relative">
                             <div className="flex-1">
                                 <label className="text-[10px] font-bold text-slate-400 uppercase">Esercizio *</label>
                                 <input 
                                     type="text" 
+                                    list={`list-${idx}`} // Collega al datalist
                                     className={`w-full text-lg font-bold bg-transparent outline-none border-b ${!ex.name ? 'border-red-300 bg-red-50' : 'border-transparent'}`}
-                                    placeholder="Es. Squat (Obbligatorio)"
+                                    placeholder="Es. Squat (Inizia a scrivere...)"
                                     value={ex.name}
                                     onChange={(e) => updateExerciseName(ex, e.target.value)}
                                 />
+                                {/* SUGGERIMENTI */}
+                                <datalist id={`list-${idx}`}>
+                                    {exerciseLibrary.map((name, i) => <option key={i} value={name} />)}
+                                </datalist>
                             </div>
                             <button onClick={() => removeExercise(ex)} className="text-slate-300 hover:text-red-500 p-2"><Trash2 size={18}/></button>
                         </div>
 
-                        {/* Riga 2: Parametri della SETTIMANA CORRENTE */}
+                        {/* Riga 2: Parametri */}
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 bg-slate-50 p-3 rounded-lg">
                             <div>
                                 <label className="text-[9px] font-bold text-slate-400 uppercase">Serie</label>
@@ -257,7 +292,7 @@ export default function EditorPage() {
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-bold text-slate-400 uppercase">RPE (Fatica)</label>
+                                <label className="text-[9px] font-bold text-slate-400 uppercase">RPE</label>
                                 <input type="text" className="w-full font-bold text-orange-500 bg-transparent outline-none" placeholder="1-10" 
                                     value={ex.progression?.[viewWeek]?.rpe || ''} 
                                     onChange={(e) => updateProgression(ex, 'rpe', e.target.value)}
@@ -265,8 +300,7 @@ export default function EditorPage() {
                             </div>
                         </div>
                         
-                        {/* Note */}
-                        <input type="text" className="w-full text-xs text-slate-500 bg-transparent outline-none border-b border-transparent focus:border-slate-300" placeholder="Note tecniche..." value={ex.notes} onChange={(e) => updateExercise(ex, 'notes', e.target.value)}/>
+                        <input type="text" className="w-full text-xs text-slate-500 bg-transparent outline-none border-b border-transparent focus:border-slate-300" placeholder="Note tecniche..." value={ex.notes || ''} onChange={(e) => updateNotes(ex, e.target.value)}/>
                     </div>
                 </div>
             ))}
