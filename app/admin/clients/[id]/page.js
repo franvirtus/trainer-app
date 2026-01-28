@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Calendar, Dumbbell, Trash2, Mail, Phone, Edit3 } from 'lucide-react';
+import { ArrowLeft, Plus, Calendar, Dumbbell, Trash2, Mail, Phone, Edit3, Share2 } from 'lucide-react'; // <--- Ho aggiunto Share2
 import Link from 'next/link';
 
 export default function ClientDetailPage() {
@@ -40,6 +40,16 @@ export default function ClientDetailPage() {
       if(!error) fetchData(); 
   };
 
+  // --- NUOVA FUNZIONE WHATSAPP ---
+  const shareOnWhatsApp = (programId, programTitle) => {
+    // Costruiamo il link pubblico
+    const link = `${window.location.origin}/live/${programId}`;
+    const message = `Ciao ${client.full_name || ''}! Ecco la tua scheda "${programTitle}" 💪: ${link}`;
+    
+    // Apre WhatsApp
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
   if (loading) return <div className="p-10 text-center text-slate-400">Caricamento profilo...</div>;
   if (!client) return <div className="p-10 text-center text-red-500">Atleta non trovato.</div>;
 
@@ -51,6 +61,7 @@ export default function ClientDetailPage() {
             <ArrowLeft size={18}/> Torna alla Dashboard
         </Link>
 
+        {/* HEADER CLIENTE */}
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 mb-8 flex justify-between items-center">
             <div>
                 <h1 className="text-3xl font-bold text-slate-800">{client.full_name}</h1>
@@ -60,7 +71,7 @@ export default function ClientDetailPage() {
                 </div>
             </div>
             <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-2xl font-bold uppercase">
-                {client.full_name.charAt(0)}
+                {client.full_name ? client.full_name.charAt(0) : '?'}
             </div>
         </div>
 
@@ -83,7 +94,6 @@ export default function ClientDetailPage() {
                 {programs.map(program => (
                     <div key={program.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center hover:shadow-md transition group">
                         
-                        {/* LINK CHE PORTA ALL'EDITOR DEGLI ESERCIZI */}
                         <Link href={`/admin/editor/${program.id}`} className="flex-1 cursor-pointer">
                             <div>
                                 <h3 className="text-lg font-bold text-slate-800 group-hover:text-blue-600 transition flex items-center gap-2">
@@ -95,10 +105,20 @@ export default function ClientDetailPage() {
                             </div>
                         </Link>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                            {/* TASTO WHATSAPP */}
+                            <button 
+                                onClick={() => shareOnWhatsApp(program.id, program.title)}
+                                className="text-green-600 hover:text-green-700 bg-green-50 p-2 rounded-lg hover:bg-green-100 transition"
+                                title="Condividi su WhatsApp"
+                            >
+                                <Share2 size={18}/>
+                            </button>
+
                             <Link href={`/live/${program.id}`} target="_blank" className="text-blue-600 font-bold text-xs uppercase bg-blue-50 px-3 py-2 rounded-lg hover:bg-blue-100 transition">
                                 Apri Live
                             </Link>
+                            
                             <button onClick={() => deleteProgram(program.id)} className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg transition">
                                 <Trash2 size={18}/>
                             </button>
