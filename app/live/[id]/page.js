@@ -538,3 +538,30 @@ export default function LivePage({ params }) {
                     <button
                       onClick={() => openEdit(ex.name, logData)}
                       className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all active:scale-95 gap-2 shadow-lg border ${
+                        isDone
+                          ? "bg-transparent border-slate-600 text-slate-300 hover:border-slate-500 hover:text-white"
+                          : "bg-blue-600 border-blue-600 text-white hover:bg-blue-500 shadow-blue-900/20"
+                      }`}
+                    >
+                      {isDone ? (
+                        <>
+                          <Edit2 size={16} /> MODIFICA DATI
+                        </>
+                      ) : (
+                        <>
+                          <Activity size={16} /> INSERISCI DATI
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        <div className="h-20"></div>
+      </div>
+    </div>
+  );
+}
