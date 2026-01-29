@@ -15,7 +15,7 @@ export default function AdminDashboard() {
 
   const supabase = createClient(supabaseUrl, supabaseKey);
 
-  const [clients, setClients] = useState<any[]>([]);
+  const [clients, setClients] = useState([]);
   const [trainerName, setTrainerName] = useState("");
   const [loading, setLoading] = useState(true);
 
