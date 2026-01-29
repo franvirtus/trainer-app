@@ -4,13 +4,13 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-// Rinonimo l'icona User per evitare conflitti con la variabile user
+// Rinonimo l'icona User in UserIcon per evitare conflitti
 import { Users, Plus, Search, LogOut, Dumbbell, User as UserIcon } from 'lucide-react';
 
 export default function Dashboard() {
   const router = useRouter();
   
-  // SPOSTATO DENTRO PER EVITARE ERRORE DI BUILD
+  // Connessione al database
   const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
   const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
   const supabase = createClient(supabaseUrl, supabaseKey);
@@ -20,27 +20,29 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    fetchData();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const fetchData = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-        router.push("/");
-        return;
-    }
-    
-    // Cerca il nome corretto (Priorità a 'name' che è quello che vedi giusto)
-    const meta = user.user_metadata || {};
-    setCoachName(meta.name || meta.full_name || user.email?.split('@')[0]);
-
-    const { data: clientsData } = await supabase
-      .from('clients')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const fetchData = async () => {
+      // 1. Controlla Utente Loggato
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+          router.push("/"); // Se non sei loggato, torna al login
+          return;
+      }
       
-    if (clientsData) setClients(clientsData);
-  };
+      // 2. Prendi il nome del Coach (es. "Prima")
+      const meta = user.user_metadata || {};
+      setCoachName(meta.name || meta.full_name || user.email?.split('@')[0]);
+
+      // 3. Scarica la lista degli Atleti
+      const { data: clientsData } = await supabase
+        .from('clients')
+        .select('*')
+        .order('created_at', { ascending: false });
+        
+      if (clientsData) setClients(clientsData);
+    };
+
+    fetchData();
+  }, [router]); // Rimosso dipendenze che causavano loop
 
   const createClient = async () => {
       const name = prompt("Nome e Cognome Atleta:");
@@ -48,7 +50,7 @@ export default function Dashboard() {
       
       const { error } = await supabase.from('clients').insert([{ full_name: name }]);
       if (error) alert(error.message);
-      else fetchData();
+      else window.location.reload(); 
   };
 
   const filteredClients = clients.filter(c => 
@@ -58,6 +60,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-6 font-sans">
       <div className="max-w-md mx-auto">
+        {/* HEADER */}
         <div className="flex justify-between items-center mb-8">
             <div>
                 <h1 className="text-2xl font-bold text-white flex items-center gap-2">
@@ -70,6 +73,7 @@ export default function Dashboard() {
             </button>
         </div>
 
+        {/* BARRA DI RICERCA E TASTO AGGIUNGI */}
         <div className="flex gap-2 mb-6">
             <div className="flex-1 bg-slate-800 rounded-xl flex items-center px-4 border border-slate-700">
                 <Search size={20} className="text-slate-500"/>
@@ -86,6 +90,7 @@ export default function Dashboard() {
             </button>
         </div>
 
+        {/* LISTA ATLETI */}
         <div className="space-y-3">
             {filteredClients.length === 0 ? (
                 <p className="text-center text-slate-500 py-10">Nessun atleta trovato.</p>
