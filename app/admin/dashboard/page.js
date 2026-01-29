@@ -9,6 +9,8 @@ import { Users, Plus, Search, LogOut, Dumbbell, User as UserIcon } from 'lucide-
 
 export default function Dashboard() {
   const router = useRouter();
+  
+  // SPOSTATO DENTRO PER EVITARE ERRORE DI BUILD
   const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
   const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
   const supabase = createClient(supabaseUrl, supabaseKey);
@@ -19,7 +21,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
