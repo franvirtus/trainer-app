@@ -3,7 +3,18 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect, use } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Info, Check, Plus, X, History, Trash2, Dumbbell, User, Edit2, Activity } from "lucide-react";
+import {
+  Info,
+  Check,
+  Plus,
+  X,
+  History,
+  Trash2,
+  Dumbbell,
+  User,
+  Edit2,
+  Activity,
+} from "lucide-react";
 
 export default function LivePage({ params }) {
   const { id } = use(params);
@@ -47,13 +58,14 @@ export default function LivePage({ params }) {
       setProgram(prog);
 
       if (prog.client_id) {
-        const { data: client } = await supabase
+        // ✅ Sicuro: in clients hai full_name
+        const { data: client, error: clientErr } = await supabase
           .from("clients")
-          .select("full_name, name")
+          .select("full_name")
           .eq("id", prog.client_id)
           .single();
 
-        if (client) setClientName(client.full_name || client.name || "");
+        if (!clientErr && client) setClientName(client.full_name || "");
       }
     }
 
@@ -333,7 +345,9 @@ export default function LivePage({ params }) {
             <div
               key={index}
               className={`rounded-2xl border transition-all overflow-hidden relative ${
-                isDone ? "bg-slate-900/50 border-green-800/50 shadow-lg shadow-green-900/10" : "bg-slate-800 border-slate-700"
+                isDone
+                  ? "bg-slate-900/50 border-green-800/50 shadow-lg shadow-green-900/10"
+                  : "bg-slate-800 border-slate-700"
               }`}
             >
               {isEditing ? (
@@ -431,13 +445,8 @@ export default function LivePage({ params }) {
                 </div>
               ) : (
                 <div className="flex flex-col">
-                  {/* HEADER CARD */}
                   <div className="p-5 border-b border-slate-700/50 bg-slate-800/40">
-                    <h3
-                      className={`text-xl font-bold capitalize mb-1 ${
-                        isDone ? "text-green-500" : "text-white"
-                      }`}
-                    >
+                    <h3 className={`text-xl font-bold capitalize mb-1 ${isDone ? "text-green-500" : "text-white"}`}>
                       {ex.name}
                     </h3>
                     {weekData.note && (
@@ -447,7 +456,6 @@ export default function LivePage({ params }) {
                     )}
                   </div>
 
-                  {/* TARGET GRID */}
                   <div className="grid grid-cols-4 divide-x divide-slate-700/50 bg-slate-800/20 border-b border-slate-700/50">
                     <div className="p-3 text-center">
                       <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">
@@ -472,48 +480,39 @@ export default function LivePage({ params }) {
                       <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">
                         RPE
                       </span>
-                      <div className="text-orange-400 font-bold text-sm">
-                        {weekData.rpe || "-"}
-                      </div>
+                      <div className="text-orange-400 font-bold text-sm">{weekData.rpe || "-"}</div>
                     </div>
 
                     <div className="p-3 text-center">
                       <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">
                         Recupero
                       </span>
-                      <div className="text-blue-400 font-bold text-sm">
-                        {weekData.rest || "-"}
-                      </div>
+                      <div className="text-blue-400 font-bold text-sm">{weekData.rest || "-"}</div>
                     </div>
                   </div>
 
-                  {/* SEZIONE "SET ESEGUITI" (REPLICA FOTO) */}
+                  {/* ✅ SET ESEGUITI: REPS e KG VICINE, struttura “tabellare” coerente */}
                   {isDone && (
                     <div className="bg-slate-900/30 p-4">
-                      {/* NUOVA INTESTAZIONE 3 COLONNE (SET | REPS | KG) */}
-                      <div className="flex text-[10px] uppercase font-bold text-green-600/80 mb-2 border-b border-green-900/20 pb-1">
-                         <span className="w-8">Set</span>
-                         <span className="flex-1 text-center">Reps</span>
-                         <span className="flex-1 text-right">Kg</span>
+                      <div className="grid grid-cols-[48px_80px_80px] justify-center text-[10px] uppercase font-bold text-green-600/80 mb-2 border-b border-green-900/20 pb-1">
+                        <span className="text-left">Set</span>
+                        <span className="text-center">Reps</span>
+                        <span className="text-center">Kg</span>
                       </div>
 
                       <div className="space-y-1 mb-3">
                         {savedReps.map((r, i) => (
                           <div
                             key={i}
-                            className="flex text-sm font-mono items-center"
+                            className="grid grid-cols-[48px_80px_80px] justify-center text-sm font-mono items-center"
                           >
-                            <span className="text-green-500/70 w-8 font-bold">#{i + 1}</span>
-                            <span className="flex-1 text-center font-bold text-white">
-                                {r}
-                            </span>
-                            <span className="flex-1 text-right text-green-400 font-bold">
-                                {savedWeight[i] || "-"}
-                            </span>
+                            <span className="text-green-500/70 font-bold text-left">#{i + 1}</span>
+                            <span className="text-center font-bold text-white">{r}</span>
+                            <span className="text-center text-green-400 font-bold">{savedWeight[i] || "-"}</span>
                           </div>
                         ))}
                       </div>
-                      
+
                       {logData?.notes && (
                         <div className="text-xs text-green-200/50 italic border-t border-green-900/20 pt-2 mt-2">
                           "{logData.notes}"
@@ -522,7 +521,6 @@ export default function LivePage({ params }) {
                     </div>
                   )}
 
-                  {/* STORICO (VISUALE FOTO 4) */}
                   {history && !isDone && (
                     <div className="bg-slate-900/40 p-4 border-t border-slate-800/50 flex justify-between items-center text-xs">
                       <span className="text-slate-500 font-bold flex items-center gap-2 uppercase text-[10px]">
