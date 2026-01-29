@@ -3,18 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect, use } from "react";
 import { createClient } from "@supabase/supabase-js";
-import {
-  Info,
-  Check,
-  Plus,
-  X,
-  History,
-  Trash2,
-  Dumbbell,
-  User,
-  Edit2,
-  Activity,
-} from "lucide-react";
+import { Info, Check, Plus, X, History, Trash2, Dumbbell, User, Edit2, Activity } from "lucide-react";
 
 export default function LivePage({ params }) {
   const { id } = use(params);
@@ -58,14 +47,14 @@ export default function LivePage({ params }) {
       setProgram(prog);
 
       if (prog.client_id) {
-        // ✅ DB: clients ha full_name, non name
+        // ✅ FIX: Cerca sia 'full_name' che 'name' per sicurezza
         const { data: client } = await supabase
           .from("clients")
-          .select("full_name")
+          .select("full_name, name") 
           .eq("id", prog.client_id)
           .single();
 
-        if (client) setClientName(client.full_name || "");
+        if (client) setClientName(client.full_name || client.name || "");
       }
     }
 
@@ -165,10 +154,9 @@ export default function LivePage({ params }) {
   const saveLog = async (ex) => {
     for (let i = 0; i < setLogsData.length; i++) {
       const row = setLogsData[i];
-      const r = parseFloat(row.reps);
-      const w = parseFloat(row.weight);
-      if (!row.reps || Number.isNaN(r) || r <= 0 || !row.weight || Number.isNaN(w) || w <= 0) {
-        alert(`Errore Set ${i + 1}: Inserisci valori validi (>0).`);
+      // Controllo più permissivo: basta che non sia vuoto
+      if (!row.reps || !row.weight) {
+        alert(`Errore Set ${i + 1}: Inserisci tutti i valori.`);
         return;
       }
     }
@@ -246,6 +234,16 @@ export default function LivePage({ params }) {
     closeEdit();
   };
 
+  // ✅ NUOVA FUNZIONE PER LO STORICO COMPLETO
+  const formatHistory = (history) => {
+      const reps = String(history.actual_reps || "").split("-");
+      const weight = String(history.actual_weight || "").split("-");
+      // Se c'è solo un set
+      if(reps.length === 1) return `${reps[0]} reps @ ${weight[0]} kg`;
+      // Se ci sono più set, mostriamo la sequenza
+      return `${reps.join("-")} reps @ ${weight.join("-")} kg`;
+  };
+
   const currentExercises = exercises.filter((ex) => (ex.day || "Giorno A") === activeDay);
 
   if (loading)
@@ -264,7 +262,7 @@ export default function LivePage({ params }) {
               <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-0.5 flex items-center gap-1">
                 <Dumbbell size={10} /> {program?.coach_name || "COACH"}
               </div>
-              <h1 className="text-2xl font-bold text-white leading-none">{program?.title}</h1>
+              <h1 className="text-2xl font-bold text-white leading-none capitalize">{program?.title}</h1>
             </div>
 
             {clientName && (
@@ -347,7 +345,7 @@ export default function LivePage({ params }) {
                 <div className="p-4 bg-slate-800 animate-in fade-in zoom-in-95 duration-200">
                   <div className="flex justify-between items-center mb-4">
                     <div>
-                      <h3 className="text-lg font-bold text-white">{ex.name}</h3>
+                      <h3 className="text-lg font-bold text-white capitalize">{ex.name}</h3>
                       <p className="text-xs text-slate-400">
                         Target: {weekData.sets} x {weekData.reps}
                       </p>
@@ -367,7 +365,6 @@ export default function LivePage({ params }) {
                     <span className="w-8"></span>
                   </div>
 
-                  {/* ✅ INPUT PIÙ PICCOLI: niente flex-1, larghezze fisse */}
                   <div className="space-y-2 mb-4">
                     {setLogsData.map((row, i) => (
                       <div key={i} className="flex gap-2 items-center justify-center">
@@ -392,7 +389,6 @@ export default function LivePage({ params }) {
                         <button
                           onClick={() => removeSetRow(i)}
                           className="w-8 h-8 flex items-center justify-center rounded-md bg-slate-700 text-slate-300 hover:bg-red-900/40 hover:text-red-300 transition"
-                          aria-label="Rimuovi serie"
                         >
                           <X size={14} />
                         </button>
@@ -505,14 +501,15 @@ export default function LivePage({ params }) {
                     </div>
                   )}
 
+                  {/* ✅ STORICO COMPLETO */}
                   {history && !isDone && (
-                    <div className="bg-slate-900/40 p-3 border-t border-slate-800/50 flex items-center justify-between text-xs px-5">
-                      <span className="text-slate-500 font-bold flex items-center gap-1">
-                        <History size={12} /> Settimana Scorsa
+                    <div className="bg-slate-900/40 p-3 border-t border-slate-800/50 flex flex-col gap-1 text-xs px-5">
+                      <span className="text-slate-500 font-bold flex items-center gap-1 uppercase text-[10px]">
+                        <History size={10} /> Settimana Scorsa
                       </span>
-                      <span className="text-slate-400 font-mono">
-                        {String(history.actual_reps || "").split("-")[0]} reps @{" "}
-                        {String(history.actual_weight || "").split("-")[0]} kg
+                      <span className="text-slate-300 font-mono tracking-wide">
+                        {/* Qui usiamo la funzione per mostrare tutto */}
+                        {formatHistory(history)}
                       </span>
                     </div>
                   )}
