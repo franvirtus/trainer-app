@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
-import { Users, ChevronRight, LogOut, User, Plus, Trash2, X } from "lucide-react";
+import { Users, ChevronRight, LogOut, User, X, Plus } from "lucide-react";
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -19,10 +19,18 @@ export default function AdminDashboard() {
   const [trainerName, setTrainerName] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // MODAL NUOVO ATLETA
-  const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ full_name: "", email: "", phone: "" });
-  const [busy, setBusy] = useState(false);
+  // MODAL state
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // form fields
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [birthDate, setBirthDate] = useState(""); // YYYY-MM-DD
+  const [heightCm, setHeightCm] = useState("");
+  const [weightKg, setWeightKg] = useState("");
+  const [goal, setGoal] = useState("");
 
   useEffect(() => {
     fetchData();
@@ -42,9 +50,10 @@ export default function AdminDashboard() {
 
     setTrainerName(user.user_metadata?.first_name || user.email.split("@")[0]);
 
+    // ora selezioniamo anche i nuovi campi (se vuoi mostrarli)
     const { data, error } = await supabase
       .from("clients")
-      .select("id, created_at, full_name, email, phone")
+      .select("id, created_at, full_name, email, phone, birth_date, height_cm, current_weight_kg, goal")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -57,93 +66,69 @@ export default function AdminDashboard() {
     setLoading(false);
   };
 
-  const openCreate = () => {
-    setForm({ full_name: "", email: "", phone: "" });
-    setShowCreate(true);
+  const resetForm = () => {
+    setFullName("");
+    setEmail("");
+    setPhone("");
+    setBirthDate("");
+    setHeightCm("");
+    setWeightKg("");
+    setGoal("");
   };
 
-  const createAthlete = async () => {
-    const fullName = (form.full_name || "").trim();
-    if (!fullName) {
-      alert("Inserisci almeno Nome e Cognome.");
+  const openModal = () => {
+    resetForm();
+    setOpen(true);
+  };
+
+  const closeModal = () => {
+    setOpen(false);
+  };
+
+  const createAthlete = async (e) => {
+    e?.preventDefault?.();
+
+    const name = (fullName || "").trim();
+    if (!name) {
+      alert("Inserisci almeno il nome e cognome.");
       return;
     }
 
-    setBusy(true);
+    // numeric parsing pulito
+    const h = String(heightCm || "").trim();
+    const w = String(weightKg || "").trim();
+
     const payload = {
-      full_name: fullName,
-      email: (form.email || "").trim() || null,
-      phone: (form.phone || "").trim() || null,
+      full_name: name,
+      email: String(email || "").trim() || null,
+      phone: String(phone || "").trim() || null,
+      birth_date: birthDate || null,
+      height_cm: h ? Number(h) : null,
+      current_weight_kg: w ? Number(w) : null,
+      goal: String(goal || "").trim() || null,
     };
 
-    const { error } = await supabase.from("clients").insert([payload]);
+    // validazioni minime
+    if (h && (Number.isNaN(payload.height_cm) || payload.height_cm <= 0)) {
+      alert("Altezza non valida.");
+      return;
+    }
+    if (w && (Number.isNaN(payload.current_weight_kg) || payload.current_weight_kg <= 0)) {
+      alert("Peso non valido.");
+      return;
+    }
 
-    setBusy(false);
+    setSaving(true);
+    const { error } = await supabase.from("clients").insert([payload]);
+    setSaving(false);
 
     if (error) {
       alert("Errore DB: " + error.message);
       return;
     }
 
-    setShowCreate(false);
+    closeModal();
     fetchData();
-  };
-
-  // ✅ ELIMINA ATLETA (cascata in app)
-  const deleteAthlete = async (clientId, displayName) => {
-    const ok = confirm(
-      `Eliminare definitivamente l'atleta "${displayName}"?\n\nVerranno eliminate anche schede, esercizi e log collegati.`
-    );
-    if (!ok) return;
-
-    setBusy(true);
-    try {
-      // 1) prendo i programmi dell'atleta
-      const { data: progs, error: pErr } = await supabase
-        .from("programs")
-        .select("id")
-        .eq("client_id", clientId);
-
-      if (pErr) throw pErr;
-
-      const progIds = (progs || []).map((p) => p.id);
-
-      if (progIds.length > 0) {
-        // 2) cancello logs
-        const { error: lErr } = await supabase
-          .from("workout_logs")
-          .delete()
-          .in("program_id", progIds);
-
-        if (lErr) throw lErr;
-
-        // 3) cancello exercises
-        const { error: eErr } = await supabase
-          .from("exercises")
-          .delete()
-          .in("program_id", progIds);
-
-        if (eErr) throw eErr;
-
-        // 4) cancello programs
-        const { error: prErr } = await supabase
-          .from("programs")
-          .delete()
-          .in("id", progIds);
-
-        if (prErr) throw prErr;
-      }
-
-      // 5) cancello client
-      const { error: cErr } = await supabase.from("clients").delete().eq("id", clientId);
-      if (cErr) throw cErr;
-
-      await fetchData();
-    } catch (err) {
-      alert("Errore eliminazione: " + (err?.message || String(err)));
-    } finally {
-      setBusy(false);
-    }
   };
 
   const handleLogout = async () => {
@@ -161,7 +146,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
-      {/* HEADER */}
+      {/* TOP BAR */}
       <div className="bg-slate-900 text-white p-6 sticky top-0 z-10 flex justify-between items-center shadow-lg">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
@@ -173,10 +158,10 @@ export default function AdminDashboard() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* NUOVO TASTO: non più + flottante */}
           <button
-            onClick={openCreate}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-sm flex items-center gap-2 transition disabled:opacity-60"
-            disabled={busy}
+            onClick={openModal}
+            className="bg-blue-600 hover:bg-blue-500 transition text-white font-bold px-4 py-2 rounded-xl flex items-center gap-2 shadow"
           >
             <Plus size={18} /> Aggiungi atleta
           </button>
@@ -191,11 +176,12 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* LISTA */}
       <div className="max-w-2xl mx-auto p-6">
         {clients.length === 0 ? (
           <div className="text-center py-20 text-slate-400">
             <p>Nessun atleta trovato.</p>
-            <p className="text-sm">Usa “Aggiungi atleta”.</p>
+            <p className="text-sm">Clicca “Aggiungi atleta” per iniziare.</p>
           </div>
         ) : (
           <div className="grid gap-3">
@@ -215,28 +201,18 @@ export default function AdminDashboard() {
                     </div>
                     <div>
                       <h3 className="font-bold text-lg text-slate-800">{displayName}</h3>
-                      {(client.email || client.phone) && (
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {client.email || client.phone}
-                        </p>
-                      )}
+
+                      {/* info secondarie */}
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {(client.email || client.phone) ? (client.email || client.phone) : "—"}
+                        {"  ·  "}
+                        {client.current_weight_kg ? `${client.current_weight_kg} kg` : "peso —"}
+                        {"  ·  "}
+                        {client.height_cm ? `${client.height_cm} cm` : "altezza —"}
+                      </p>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteAthlete(client.id, displayName);
-                      }}
-                      className="p-2 rounded-lg text-slate-300 hover:text-red-600 hover:bg-red-50 transition"
-                      title="Elimina atleta"
-                      disabled={busy}
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                    <ChevronRight className="text-slate-300" />
-                  </div>
+                  <ChevronRight className="text-slate-300" />
                 </div>
               );
             })}
@@ -244,76 +220,119 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* MODAL CREA ATLETA */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-            <div className="p-4 border-b border-slate-200 flex justify-between items-center">
-              <div className="font-bold text-slate-900">Nuovo atleta</div>
+      {/* MODAL */}
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-5 flex items-center justify-between border-b border-slate-200">
+              <div>
+                <div className="text-sm font-bold text-slate-900">Nuovo atleta</div>
+                <div className="text-xs text-slate-500">Inserisci i dati base. Puoi modificarli dopo.</div>
+              </div>
               <button
-                onClick={() => setShowCreate(false)}
-                className="p-2 rounded-full hover:bg-slate-100 transition"
+                onClick={closeModal}
+                className="p-2 rounded-lg hover:bg-slate-100 text-slate-500"
                 aria-label="Chiudi"
-                disabled={busy}
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="p-4 space-y-3">
+            <form onSubmit={createAthlete} className="p-5 space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase">Nome e Cognome *</label>
+                <label className="text-xs font-bold text-slate-600">Nome e cognome *</label>
                 <input
-                  value={form.full_name}
-                  onChange={(e) => setForm((p) => ({ ...p, full_name: e.target.value }))}
-                  className="mt-1 w-full h-11 px-3 rounded-xl border border-slate-300 outline-none focus:border-blue-500"
-                  placeholder="Es. Marco Rossi"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+                  placeholder="Es. Mario Rossi"
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase">Email</label>
-                <input
-                  value={form.email}
-                  onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-                  className="mt-1 w-full h-11 px-3 rounded-xl border border-slate-300 outline-none focus:border-blue-500"
-                  placeholder="Es. marco@email.it"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-600">Email</label>
+                  <input
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+                    placeholder="mario@email.it"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600">Telefono</label>
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+                    placeholder="+39..."
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-600">Data di nascita</label>
+                  <input
+                    type="date"
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(e.target.value)}
+                    className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600">Altezza (cm)</label>
+                  <input
+                    inputMode="numeric"
+                    value={heightCm}
+                    onChange={(e) => setHeightCm(e.target.value)}
+                    className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+                    placeholder="180"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600">Peso attuale (kg)</label>
+                  <input
+                    inputMode="decimal"
+                    value={weightKg}
+                    onChange={(e) => setWeightKg(e.target.value)}
+                    className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+                    placeholder="82.5"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase">Telefono</label>
+                <label className="text-xs font-bold text-slate-600">Obiettivo</label>
                 <input
-                  value={form.phone}
-                  onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-                  className="mt-1 w-full h-11 px-3 rounded-xl border border-slate-300 outline-none focus:border-blue-500"
-                  placeholder="Es. 3331234567"
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
+                  className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+                  placeholder="Es. Dimagrimento / Forza / Massa..."
                 />
               </div>
 
               <div className="flex gap-2 pt-2">
                 <button
-                  onClick={() => setShowCreate(false)}
-                  className="flex-1 h-11 rounded-xl border border-slate-300 font-bold text-slate-700 hover:bg-slate-50 transition"
-                  disabled={busy}
+                  type="button"
+                  onClick={closeModal}
+                  className="flex-1 border border-slate-200 rounded-xl py-3 font-bold text-slate-600 hover:bg-slate-50"
+                  disabled={saving}
                 >
                   Annulla
                 </button>
                 <button
-                  onClick={createAthlete}
-                  className="flex-1 h-11 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-500 transition disabled:opacity-60"
-                  disabled={busy}
+                  type="submit"
+                  className="flex-1 bg-slate-900 text-white rounded-xl py-3 font-bold hover:bg-black disabled:opacity-60"
+                  disabled={saving}
                 >
-                  Crea atleta
+                  {saving ? "Salvataggio..." : "Crea atleta"}
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}
-
-      {/* BLOCCO CLICK mentre busy (opzionale) */}
-      {busy && <div className="fixed inset-0 z-40" />}
     </div>
   );
 }
