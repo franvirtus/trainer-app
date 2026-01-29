@@ -67,7 +67,22 @@ export default function LivePage({ params }) {
     if (ex && ex.length > 0) {
       setExercises(ex);
 
-      const uniqueDays = [...new Set(ex.map((item) => item.day || "Giorno A"))].sort();
+      // Giorni nell'ordine di creazione (ordine di prima comparsa negli esercizi)
+const uniqueDays = [];
+const seen = new Set();
+
+for (const item of ex) {
+  const d = item.day || "Giorno A";
+  if (!seen.has(d)) {
+    seen.add(d);
+    uniqueDays.push(d);
+  }
+}
+
+setAvailableDays(uniqueDays);
+
+if (!activeDay) setActiveDay(uniqueDays[0]);
+
       setAvailableDays(uniqueDays);
 
       if (!activeDay) setActiveDay(uniqueDays[0]);
