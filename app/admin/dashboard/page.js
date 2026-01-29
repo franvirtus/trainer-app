@@ -237,7 +237,7 @@ export default function AdminDashboard() {
             <div className="p-5 border-b border-slate-200 flex items-start justify-between">
               <div>
                 <div className="text-lg font-bold text-slate-900">Nuovo atleta</div>
-                <div className="text-sm text-slate-500">Inserisci i dati base. Potrai modificarli dalla scheda atleta.</div>
+                <div className="text-sm text-slate-500">Inserisci i dati base.</div>
               </div>
               <button
                 onClick={closeCreate}
