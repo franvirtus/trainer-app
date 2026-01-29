@@ -54,7 +54,7 @@ export default function ClientPage({ params }) {
     }
 
     const { data, error } = await supabase.from("programs").insert([
-        { client_id: id, title: title, coach_name: coachName, duration: 4, status: "active" },
+        { client_id: id, title: title, coach_name: coachName, duration: 4 },
       ]).select().single();
 
     if (error) alert("Errore: " + error.message);
