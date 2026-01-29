@@ -1,120 +1,128 @@
 "use client";
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-import { useRouter } from 'next/navigation';
-// Rinonimo l'icona User in UserIcon per evitare conflitti
-import { Users, Plus, Search, LogOut, Dumbbell, User as UserIcon } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
+import { useRouter } from "next/navigation";
+import { Plus, Users, ChevronRight, LogOut, User } from "lucide-react";
 
-export default function Dashboard() {
+export default function AdminDashboard() {
   const router = useRouter();
-  
-  // Connessione al database
+
   const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
-  const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
+  const supabaseKey =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
+
   const supabase = createClient(supabaseUrl, supabaseKey);
 
-  const [clients, setClients] = useState([]);
-  const [coachName, setCoachName] = useState("");
-  const [search, setSearch] = useState("");
+  const [clients, setClients] = useState<any[]>([]);
+  const [trainerName, setTrainerName] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchData = async () => {
-      // 1. Controlla Utente Loggato
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-          router.push("/"); // Se non sei loggato, torna al login
-          return;
-      }
-      
-      // 2. Prendi il nome del Coach (es. "Prima")
-      const meta = user.user_metadata || {};
-      setCoachName(meta.name || meta.full_name || user.email?.split('@')[0]);
-
-      // 3. Scarica la lista degli Atleti
-      const { data: clientsData } = await supabase
-        .from('clients')
-        .select('*')
-        .order('created_at', { ascending: false });
-        
-      if (clientsData) setClients(clientsData);
-    };
-
     fetchData();
-  }, [router]); // Rimosso dipendenze che causavano loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const createClient = async () => {
-      const name = prompt("Nome e Cognome Atleta:");
-      if (!name) return;
-      
-      const { error } = await supabase.from('clients').insert([{ full_name: name }]);
-      if (error) alert(error.message);
-      else window.location.reload(); 
+  const fetchData = async () => {
+    setLoading(true);
+
+    const { data: { user }, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !user) {
+      router.push("/");
+      return;
+    }
+
+    setTrainerName(user.user_metadata?.first_name || user.email?.split("@")[0] || "Coach");
+
+    const { data, error } = await supabase
+      .from("clients")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (!error) setClients(data || []);
+    setLoading(false);
   };
 
-  const filteredClients = clients.filter(c => 
-    (c.full_name || c.name || "").toLowerCase().includes(search.toLowerCase())
-  );
+  // ✅ RINOMINATA: niente più collisione con createClient di Supabase
+  const handleCreateClient = async () => {
+    const name = prompt("Nome nuovo atleta:");
+    if (!name) return;
+
+    const { error } = await supabase.from("clients").insert([{ name }]);
+
+    if (error) {
+      alert("Errore DB: " + error.message);
+    } else {
+      fetchData();
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/");
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-slate-500">
+        Caricamento...
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 p-6 font-sans">
-      <div className="max-w-md mx-auto">
-        {/* HEADER */}
-        <div className="flex justify-between items-center mb-8">
-            <div>
-                <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                    <Users className="text-blue-500"/> I Miei Atleti
-                </h1>
-                <p className="text-slate-400 text-sm font-medium">Ciao, {coachName}</p>
-            </div>
-            <button onClick={async () => { await supabase.auth.signOut(); router.push('/'); }} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white hover:bg-red-900/50 transition">
-                <LogOut size={20}/>
-            </button>
+    <div className="min-h-screen bg-slate-50 font-sans">
+      <div className="bg-slate-900 text-white p-6 sticky top-0 z-10 flex justify-between items-center shadow-lg">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <Users className="text-blue-400" /> I Miei Atleti
+          </h1>
+          <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+            <User size={10} /> Ciao, {trainerName}
+          </p>
         </div>
 
-        {/* BARRA DI RICERCA E TASTO AGGIUNGI */}
-        <div className="flex gap-2 mb-6">
-            <div className="flex-1 bg-slate-800 rounded-xl flex items-center px-4 border border-slate-700">
-                <Search size={20} className="text-slate-500"/>
-                <input 
-                    type="text" 
-                    placeholder="Cerca atleta..." 
-                    className="bg-transparent border-none outline-none text-white p-3 w-full placeholder:text-slate-500"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                />
-            </div>
-            <button onClick={createClient} className="bg-blue-600 w-12 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-900/50 hover:bg-blue-500 transition">
-                <Plus size={24}/>
-            </button>
-        </div>
+        <button
+          onClick={handleLogout}
+          className="p-2 bg-slate-800 rounded-full hover:bg-red-500 hover:text-white transition"
+        >
+          <LogOut size={18} />
+        </button>
+      </div>
 
-        {/* LISTA ATLETI */}
-        <div className="space-y-3">
-            {filteredClients.length === 0 ? (
-                <p className="text-center text-slate-500 py-10">Nessun atleta trovato.</p>
-            ) : (
-                filteredClients.map(client => (
-                    <div 
-                        key={client.id} 
-                        onClick={() => router.push(`/admin/clients/${client.id}`)}
-                        className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex items-center justify-between hover:border-blue-500 transition cursor-pointer active:scale-95"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-bold">
-                                <UserIcon size={20}/>
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-white capitalize">{client.full_name || client.name}</h3>
-                                <p className="text-xs text-slate-500">Clicca per gestire</p>
-                            </div>
-                        </div>
-                        <Dumbbell size={20} className="text-slate-600"/>
-                    </div>
-                ))
-            )}
-        </div>
+      <div className="max-w-2xl mx-auto p-6">
+        {clients.length === 0 ? (
+          <div className="text-center py-20 text-slate-400">
+            <p>Nessun atleta trovato.</p>
+            <p className="text-sm">Premi + per iniziare.</p>
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {clients.map((client) => (
+              <div
+                key={client.id}
+                onClick={() => router.push(`/admin/clients/${client.id}`)}
+                className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center cursor-pointer hover:border-blue-500 hover:shadow-md transition-all"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 font-bold text-xl text-blue-600">
+                    {String(client.name || "?").charAt(0).toUpperCase()}
+                  </div>
+                  <h3 className="font-bold text-lg text-slate-800">{client.name}</h3>
+                </div>
+                <ChevronRight className="text-slate-300" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button
+          onClick={handleCreateClient}
+          className="fixed bottom-8 right-8 bg-blue-600 text-white w-16 h-16 rounded-full shadow-2xl flex items-center justify-center hover:scale-110 hover:bg-blue-500 transition-all"
+        >
+          <Plus size={32} />
+        </button>
       </div>
     </div>
   );
