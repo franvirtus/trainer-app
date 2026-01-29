@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
-import { Users, ChevronRight, LogOut, User, X, Plus } from "lucide-react";
+import { Users, ChevronRight, LogOut, User, Plus, Trash2, X } from "lucide-react";
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -19,18 +19,17 @@ export default function AdminDashboard() {
   const [trainerName, setTrainerName] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // MODAL state
-  const [open, setOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  // form fields
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [birthDate, setBirthDate] = useState(""); // YYYY-MM-DD
-  const [heightCm, setHeightCm] = useState("");
-  const [weightKg, setWeightKg] = useState("");
-  const [goal, setGoal] = useState("");
+  // Modal: nuovo atleta
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+    birth_date: "",
+    height_cm: "",
+    current_weight_kg: "",
+    goal: "",
+  });
 
   useEffect(() => {
     fetchData();
@@ -50,10 +49,12 @@ export default function AdminDashboard() {
 
     setTrainerName(user.user_metadata?.first_name || user.email.split("@")[0]);
 
-    // ora selezioniamo anche i nuovi campi (se vuoi mostrarli)
     const { data, error } = await supabase
       .from("clients")
-      .select("id, created_at, full_name, email, phone, birth_date, height_cm, current_weight_kg, goal")
+      .select(
+        "id, created_at, full_name, email, phone, birth_date, height_cm, current_weight_kg, goal, is_active"
+      )
+      .eq("is_active", true)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -66,74 +67,68 @@ export default function AdminDashboard() {
     setLoading(false);
   };
 
-  const resetForm = () => {
-    setFullName("");
-    setEmail("");
-    setPhone("");
-    setBirthDate("");
-    setHeightCm("");
-    setWeightKg("");
-    setGoal("");
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/");
   };
 
-  const openModal = () => {
-    resetForm();
-    setOpen(true);
+  const openCreate = () => {
+    setForm({
+      full_name: "",
+      email: "",
+      phone: "",
+      birth_date: "",
+      height_cm: "",
+      current_weight_kg: "",
+      goal: "",
+    });
+    setShowCreate(true);
   };
 
-  const closeModal = () => {
-    setOpen(false);
+  const closeCreate = () => {
+    setShowCreate(false);
   };
 
-  const createAthlete = async (e) => {
-    e?.preventDefault?.();
+  const onChange = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
 
-    const name = (fullName || "").trim();
-    if (!name) {
-      alert("Inserisci almeno il nome e cognome.");
+  const createAthlete = async () => {
+    const fullName = (form.full_name || "").trim();
+    if (!fullName) {
+      alert("Inserisci Nome e cognome.");
       return;
     }
-
-    // numeric parsing pulito
-    const h = String(heightCm || "").trim();
-    const w = String(weightKg || "").trim();
 
     const payload = {
-      full_name: name,
-      email: String(email || "").trim() || null,
-      phone: String(phone || "").trim() || null,
-      birth_date: birthDate || null,
-      height_cm: h ? Number(h) : null,
-      current_weight_kg: w ? Number(w) : null,
-      goal: String(goal || "").trim() || null,
+      full_name: fullName,
+      email: (form.email || "").trim() || null,
+      phone: (form.phone || "").trim() || null,
+      birth_date: form.birth_date || null,
+      height_cm: form.height_cm !== "" ? Number(form.height_cm) : null,
+      current_weight_kg: form.current_weight_kg !== "" ? Number(form.current_weight_kg) : null,
+      goal: (form.goal || "").trim() || null,
+      is_active: true,
     };
 
-    // validazioni minime
-    if (h && (Number.isNaN(payload.height_cm) || payload.height_cm <= 0)) {
-      alert("Altezza non valida.");
-      return;
-    }
-    if (w && (Number.isNaN(payload.current_weight_kg) || payload.current_weight_kg <= 0)) {
-      alert("Peso non valido.");
-      return;
-    }
-
-    setSaving(true);
     const { error } = await supabase.from("clients").insert([payload]);
-    setSaving(false);
 
     if (error) {
       alert("Errore DB: " + error.message);
       return;
     }
 
-    closeModal();
+    setShowCreate(false);
     fetchData();
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/");
+  const deactivateClient = async (clientId, displayName) => {
+    if (!confirm(`Vuoi eliminare (disattivare) "${displayName}"?`)) return;
+
+    const { error } = await supabase.from("clients").update({ is_active: false }).eq("id", clientId);
+
+    if (error) alert("Errore DB: " + error.message);
+    else fetchData();
   };
 
   if (loading) {
@@ -146,7 +141,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
-      {/* TOP BAR */}
+      {/* HEADER */}
       <div className="bg-slate-900 text-white p-6 sticky top-0 z-10 flex justify-between items-center shadow-lg">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
@@ -158,10 +153,9 @@ export default function AdminDashboard() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* NUOVO TASTO: non più + flottante */}
           <button
-            onClick={openModal}
-            className="bg-blue-600 hover:bg-blue-500 transition text-white font-bold px-4 py-2 rounded-xl flex items-center gap-2 shadow"
+            onClick={openCreate}
+            className="bg-blue-600 hover:bg-blue-500 transition text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2"
           >
             <Plus size={18} /> Aggiungi atleta
           </button>
@@ -176,12 +170,12 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* LISTA */}
+      {/* BODY */}
       <div className="max-w-2xl mx-auto p-6">
         {clients.length === 0 ? (
           <div className="text-center py-20 text-slate-400">
             <p>Nessun atleta trovato.</p>
-            <p className="text-sm">Clicca “Aggiungi atleta” per iniziare.</p>
+            <p className="text-sm">Premi “Aggiungi atleta” per iniziare.</p>
           </div>
         ) : (
           <div className="grid gap-3">
@@ -201,18 +195,29 @@ export default function AdminDashboard() {
                     </div>
                     <div>
                       <h3 className="font-bold text-lg text-slate-800">{displayName}</h3>
-
-                      {/* info secondarie */}
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {(client.email || client.phone) ? (client.email || client.phone) : "—"}
-                        {"  ·  "}
-                        {client.current_weight_kg ? `${client.current_weight_kg} kg` : "peso —"}
-                        {"  ·  "}
-                        {client.height_cm ? `${client.height_cm} cm` : "altezza —"}
-                      </p>
+                      {(client.email || client.phone) && (
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {client.email || client.phone}
+                        </p>
+                      )}
                     </div>
                   </div>
-                  <ChevronRight className="text-slate-300" />
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deactivateClient(client.id, displayName);
+                      }}
+                      className="p-2 rounded-lg text-slate-300 hover:text-red-600 hover:bg-red-50 transition"
+                      title="Elimina atleta"
+                      aria-label="Elimina atleta"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+
+                    <ChevronRight className="text-slate-300" />
+                  </div>
                 </div>
               );
             })}
@@ -220,17 +225,22 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* MODAL */}
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="p-5 flex items-center justify-between border-b border-slate-200">
+      {/* MODAL CREA ATLETA */}
+      {showCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={closeCreate}
+            aria-hidden="true"
+          />
+          <div className="relative w-[92vw] max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-200 flex items-start justify-between">
               <div>
-                <div className="text-sm font-bold text-slate-900">Nuovo atleta</div>
-                <div className="text-xs text-slate-500">Inserisci i dati base. Puoi modificarli dopo.</div>
+                <div className="text-lg font-bold text-slate-900">Nuovo atleta</div>
+                <div className="text-sm text-slate-500">Inserisci i dati base. Potrai modificarli dalla scheda atleta.</div>
               </div>
               <button
-                onClick={closeModal}
+                onClick={closeCreate}
                 className="p-2 rounded-lg hover:bg-slate-100 text-slate-500"
                 aria-label="Chiudi"
               >
@@ -238,98 +248,97 @@ export default function AdminDashboard() {
               </button>
             </div>
 
-            <form onSubmit={createAthlete} className="p-5 space-y-4">
+            <div className="p-5 space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-600">Nome e cognome *</label>
+                <label className="block text-sm font-bold text-slate-700 mb-1">
+                  Nome e cognome *
+                </label>
                 <input
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+                  value={form.full_name}
+                  onChange={(e) => onChange("full_name", e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500"
                   placeholder="Es. Mario Rossi"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-600">Email</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Email</label>
                   <input
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+                    value={form.email}
+                    onChange={(e) => onChange("email", e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500"
                     placeholder="mario@email.it"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600">Telefono</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Telefono</label>
                   <input
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+                    value={form.phone}
+                    onChange={(e) => onChange("phone", e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500"
                     placeholder="+39..."
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-600">Data di nascita</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Data di nascita</label>
                   <input
                     type="date"
-                    value={birthDate}
-                    onChange={(e) => setBirthDate(e.target.value)}
-                    className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+                    value={form.birth_date}
+                    onChange={(e) => onChange("birth_date", e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600">Altezza (cm)</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Altezza (cm)</label>
                   <input
                     inputMode="numeric"
-                    value={heightCm}
-                    onChange={(e) => setHeightCm(e.target.value)}
-                    className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+                    value={form.height_cm}
+                    onChange={(e) => onChange("height_cm", e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500"
                     placeholder="180"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600">Peso attuale (kg)</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Peso attuale (kg)</label>
                   <input
                     inputMode="decimal"
-                    value={weightKg}
-                    onChange={(e) => setWeightKg(e.target.value)}
-                    className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+                    value={form.current_weight_kg}
+                    onChange={(e) => onChange("current_weight_kg", e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500"
                     placeholder="82.5"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-600">Obiettivo</label>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Obiettivo</label>
                 <input
-                  value={goal}
-                  onChange={(e) => setGoal(e.target.value)}
-                  className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+                  value={form.goal}
+                  onChange={(e) => onChange("goal", e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500"
                   placeholder="Es. Dimagrimento / Forza / Massa..."
                 />
               </div>
+            </div>
 
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="flex-1 border border-slate-200 rounded-xl py-3 font-bold text-slate-600 hover:bg-slate-50"
-                  disabled={saving}
-                >
-                  Annulla
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 bg-slate-900 text-white rounded-xl py-3 font-bold hover:bg-black disabled:opacity-60"
-                  disabled={saving}
-                >
-                  {saving ? "Salvataggio..." : "Crea atleta"}
-                </button>
-              </div>
-            </form>
+            <div className="p-5 border-t border-slate-200 flex gap-3 justify-end">
+              <button
+                onClick={closeCreate}
+                className="px-5 py-3 rounded-xl border border-slate-200 font-bold text-slate-700 hover:bg-slate-50"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={createAthlete}
+                className="px-6 py-3 rounded-xl bg-slate-900 text-white font-bold hover:bg-black transition"
+              >
+                Crea atleta
+              </button>
+            </div>
           </div>
         </div>
       )}
