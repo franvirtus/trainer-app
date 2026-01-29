@@ -4,7 +4,8 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Plus, Trash2, GripVertical, Copy, Edit3 } from 'lucide-react';
+// Aggiunto 'User' agli import
+import { ArrowLeft, Save, Plus, Trash2, GripVertical, Copy, Edit3, User } from 'lucide-react';
 
 export default function EditorPage() {
   const params = useParams();
@@ -20,6 +21,9 @@ export default function EditorPage() {
   const [saving, setSaving] = useState(false);
   const [exerciseLibrary, setExerciseLibrary] = useState([]);
   
+  // --- NUOVO STATO PER IL NOME DEL COACH ---
+  const [coachName, setCoachName] = useState("");
+
   const [activeDay, setActiveDay] = useState('Giorno A');
   const [days, setDays] = useState(['Giorno A']);
   const [viewWeek, setViewWeek] = useState(1);
@@ -38,7 +42,11 @@ export default function EditorPage() {
 
   const loadData = async () => {
     const { data: prog } = await supabase.from('programs').select('*').eq('id', id).single();
-    if (prog) setProgram(prog);
+    if (prog) {
+        setProgram(prog);
+        // Carichiamo il nome del coach se esiste nel DB
+        setCoachName(prog.coach_name || "");
+    }
 
     const { data: ex } = await supabase.from('exercises').select('*').eq('program_id', id).order('created_at', { ascending: true });
     
@@ -99,7 +107,6 @@ export default function EditorPage() {
       setExercises(exercises.map(e => (e === exToUpdate ? { ...e, notes: val } : e)));
   };
 
-  // FUNZIONE 1: RINOMINA GIORNO
   const renameDay = () => {
       const newName = prompt(`Rinomina "${activeDay}" in:`, activeDay);
       if(!newName || newName === activeDay) return;
@@ -108,15 +115,11 @@ export default function EditorPage() {
       setActiveDay(newName);
   };
 
-  // FUNZIONE 2: RINOMINA SCHEDA (NUOVA)
   const renameProgram = async () => {
       const newTitle = prompt("Nuovo nome della scheda:", program.title);
       if(!newTitle || newTitle === program.title) return;
 
-      // Aggiorna UI subito
       setProgram({ ...program, title: newTitle });
-
-      // Aggiorna DB silenziosamente
       await supabase.from('programs').update({ title: newTitle }).eq('id', id);
   };
 
@@ -158,6 +161,12 @@ export default function EditorPage() {
     }
 
     setSaving(true);
+
+    // --- 1. SALVIAMO IL NOME DEL COACH ---
+    // Questo aggiorna la tabella 'programs' senza toccare gli esercizi
+    await supabase.from('programs').update({ coach_name: coachName }).eq('id', id);
+
+    // --- 2. SALVIAMO GLI ESERCIZI (Logica esistente) ---
     await supabase.from('exercises').delete().eq('program_id', id);
 
     const toSave = exercises.map(ex => ({
@@ -192,11 +201,21 @@ export default function EditorPage() {
           <div className="flex items-center gap-4">
               <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-full"><ArrowLeft size={20}/></button>
               <div>
-                  {/* TITOLO CLICCABILE PER RINOMINARE (NUOVO) */}
                   <h1 onClick={renameProgram} className="text-xl font-bold text-slate-800 flex items-center gap-2 cursor-pointer hover:text-blue-600 transition" title="Clicca per rinominare">
                       {program.title} <Edit3 size={16} className="text-slate-400"/>
                   </h1>
-                  <p className="text-xs text-slate-500 font-bold uppercase">{program.duration} SETTIMANE</p>
+                  
+                  {/* --- NUOVO CAMPO NOME COACH --- */}
+                  <div className="flex items-center gap-2 mt-1">
+                      <User size={12} className="text-slate-400"/>
+                      <input 
+                        type="text" 
+                        placeholder="Inserisci nome coach..." 
+                        className="text-xs font-bold text-slate-500 uppercase bg-transparent outline-none border-b border-transparent hover:border-slate-300 focus:border-blue-500 placeholder:text-slate-300 w-48 transition-colors"
+                        value={coachName}
+                        onChange={(e) => setCoachName(e.target.value)}
+                      />
+                  </div>
               </div>
           </div>
           <button onClick={saveAll} disabled={saving} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow hover:bg-black transition">
@@ -215,7 +234,6 @@ export default function EditorPage() {
                         className={`px-5 py-2 rounded-lg font-bold text-sm transition flex items-center gap-2 ${activeDay === day ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200'}`}
                     >
                         {day}
-                        {/* ICONA MATITA PER RINOMINARE GIORNO */}
                         {activeDay === day && <Edit3 size={12} className="opacity-70 cursor-pointer hover:text-yellow-300" onClick={(e) => { e.stopPropagation(); renameDay(); }} />}
                     </button>
                 </div>
@@ -251,7 +269,6 @@ export default function EditorPage() {
                     <GripVertical className="text-slate-300 cursor-move mt-2"/>
                     
                     <div className="flex-1 space-y-4">
-                        {/* Riga 1: Nome con Autocomplete */}
                         <div className="flex gap-3 relative">
                             <div className="flex-1">
                                 <label className="text-[10px] font-bold text-slate-400 uppercase">Esercizio *</label>
@@ -270,7 +287,6 @@ export default function EditorPage() {
                             <button onClick={() => removeExercise(ex)} className="text-slate-300 hover:text-red-500 p-2"><Trash2 size={18}/></button>
                         </div>
 
-                        {/* Riga 2: Parametri */}
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 bg-slate-50 p-3 rounded-lg">
                             <div>
                                 <label className="text-[9px] font-bold text-slate-400 uppercase">Serie</label>
