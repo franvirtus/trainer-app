@@ -521,16 +521,52 @@ export default function LivePage({ params }) {
                     </div>
                   )}
 
-                  {history && !isDone && (
-                    <div className="bg-slate-900/40 p-4 border-t border-slate-800/50 flex justify-between items-center text-xs">
-                      <span className="text-slate-500 font-bold flex items-center gap-2 uppercase text-[10px]">
-                        <History size={12} /> Settimana Scorsa
-                      </span>
-                      <span className="text-slate-300 font-mono tracking-wide text-right">
-                        {formatHistory(history)}
-                      </span>
-                    </div>
-                  )}
+{history && !isDone && (
+  <div className="bg-slate-900/35 p-4 border-t border-slate-800/50">
+    <div className="flex items-center justify-between mb-2">
+      <span className="text-slate-500 font-bold flex items-center gap-2 uppercase text-[10px]">
+        <History size={12} /> Settimana Scorsa
+      </span>
+      <span className="text-slate-600 text-[10px] font-bold uppercase">
+        (preview)
+      </span>
+    </div>
+
+    {/* tabellina come "SET ESEGUITI" */}
+    <div className="grid grid-cols-[48px_80px_80px] justify-center text-[10px] uppercase font-bold text-slate-400/80 mb-2 border-b border-slate-700/40 pb-1">
+      <span className="text-left">Set</span>
+      <span className="text-center">Reps</span>
+      <span className="text-center">Kg</span>
+    </div>
+
+    {(() => {
+      const repsArr = String(history.actual_reps || "").split("-");
+      const wArr = String(history.actual_weight || "").split("-");
+      return (
+        <div className="space-y-1">
+          {repsArr.map((r, i) => (
+            <div
+              key={i}
+              className="grid grid-cols-[48px_80px_80px] justify-center text-sm font-mono items-center"
+            >
+              <span className="text-slate-500 font-bold text-left">#{i + 1}</span>
+              <span className="text-center font-bold text-white">{r}</span>
+              <span className="text-center text-slate-200 font-bold">{wArr[i] || "-"}</span>
+            </div>
+          ))}
+        </div>
+      );
+    })()}
+
+    {/* Note settimana scorsa, se presenti */}
+    {history.athlete_notes && (
+      <div className="text-xs text-slate-400 italic border-t border-slate-700/40 pt-2 mt-3">
+        "{history.athlete_notes}"
+      </div>
+    )}
+  </div>
+)}
+
 
                   <div className="p-3">
                     <button
