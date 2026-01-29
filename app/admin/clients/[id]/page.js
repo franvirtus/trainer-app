@@ -6,7 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import { 
   ArrowLeft, Plus, Dumbbell, Calendar, Trash2, 
-  ExternalLink, Activity, Clock, Copy 
+  ExternalLink, Activity, MessageSquare, Clock 
 } from "lucide-react";
 
 export default function ClientPage({ params }) {
@@ -20,7 +20,7 @@ export default function ClientPage({ params }) {
 
   const [client, setClient] = useState(null);
   const [programs, setPrograms] = useState([]);
-  const [recentLogs, setRecentLogs] = useState([]);
+  const [recentLogs, setRecentLogs] = useState([]); // I Log dell'atleta
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,20 +30,47 @@ export default function ClientPage({ params }) {
   const fetchData = async () => {
     setLoading(true);
     
-    // Dati Cliente
-    const { data: clientData } = await supabase.from("clients").select("*").eq("id", id).single();
+    // 1. Dati Cliente
+    const { data: clientData } = await supabase
+      .from("clients")
+      .select("*")
+      .eq("id", id)
+      .single();
     setClient(clientData);
 
-    // Schede
-    const { data: programsData } = await supabase.from("programs").select("*").eq("client_id", id).order("created_at", { ascending: false });
+    // 2. Schede del Cliente
+    const { data: programsData } = await supabase
+      .from("programs")
+      .select("*")
+      .eq("client_id", id)
+      .order("created_at", { ascending: false });
     setPrograms(programsData || []);
 
-    // Log recenti
+    // 3. LOG (Il Monitoraggio): Prende gli ultimi 20 set completati
+    const { data: logsData } = await supabase
+      .from("workout_logs")
+      .select(`
+        *,
+        programs (title)
+      `)
+      .eq("programs.client_id", id) // Filtra per cliente (tramite la scheda)
+      .order("created_at", { ascending: false })
+      .limit(20);
+      
+    // Nota: La query sopra funziona se hai le foreign key settate, 
+    // altrimenti facciamo una query più semplice per ID programma se necessario.
+    // Per sicurezza, prendiamo i log basandoci sugli ID dei programmi trovati sopra.
     if (programsData && programsData.length > 0) {
         const progIds = programsData.map(p => p.id);
-        const { data: simpleLogs } = await supabase.from("workout_logs").select("*").in("program_id", progIds).order("created_at", { ascending: false }).limit(20);
+        const { data: simpleLogs } = await supabase
+            .from("workout_logs")
+            .select("*")
+            .in("program_id", progIds)
+            .order("created_at", { ascending: false })
+            .limit(20);
         setRecentLogs(simpleLogs || []);
     }
+
     setLoading(false);
   };
 
@@ -51,31 +78,48 @@ export default function ClientPage({ params }) {
     const title = prompt("Nome della nuova scheda:");
     if (!title) return;
 
+    // 1. Recupera nome coach automatico (come nell'editor)
     const { data: { user } } = await supabase.auth.getUser();
     let coachName = "COACH";
-    if (user && user.user_metadata) {
-        coachName = user.user_metadata.name || user.user_metadata.full_name || user.email.split('@')[0];
+    if (user) {
+        coachName = user.user_metadata?.full_name || user.email?.split('@')[0] || "COACH";
     }
 
-    const { data, error } = await supabase.from("programs").insert([
-        { client_id: id, title: title, coach_name: coachName, duration: 4, status: "active" },
-      ]).select().single();
+    // 2. Crea la scheda
+    const { data, error } = await supabase
+      .from("programs")
+      .insert([
+        {
+          client_id: id,
+          title: title,
+          coach_name: coachName, // Salva subito il nome!
+          duration: 4, // Default 4 settimane
+          status: "active",
+        },
+      ])
+      .select()
+      .single();
 
-    if (error) alert("Errore: " + error.message);
-    else router.push(`/admin/editor/${data.id}`);
+    if (error) {
+      alert("Errore: " + error.message);
+    } else {
+      // 3. REDIRECT IMMEDIATO ALL'EDITOR (Risparmia click!)
+      router.push(`/admin/editor/${data.id}`);
+    }
   };
 
   const deleteProgram = async (programId) => {
-      if(!confirm("Sei sicuro di voler eliminare questa scheda?")) return;
+      if(!confirm("Sei sicuro di voler eliminare questa scheda? Perderai anche i log associati.")) return;
+      
       const { error } = await supabase.from("programs").delete().eq("id", programId);
       if(error) alert("Errore: " + error.message);
-      else fetchData();
+      else fetchData(); // Ricarica la lista
   };
 
   const copyLink = (programId) => {
     const link = `${window.location.origin}/live/${programId}`;
     navigator.clipboard.writeText(link);
-    alert("Link copiato! Invialo all'atleta.");
+    alert("Link copiato! Invialo all'atleta su WhatsApp.");
   };
 
   if (loading) return <div className="p-8 text-slate-500">Caricamento profilo...</div>;
@@ -84,24 +128,30 @@ export default function ClientPage({ params }) {
     <div className="min-h-screen bg-slate-50 font-sans p-6">
       <div className="max-w-5xl mx-auto space-y-8">
         
-        {/* HEADER CLIENTE (Senza email sotto il nome) */}
+        {/* HEADER CLIENTE */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button onClick={() => router.push("/admin/dashboard")} className="p-2 hover:bg-slate-200 rounded-full transition">
               <ArrowLeft size={24} className="text-slate-600" />
             </button>
             <div>
-              <h1 className="text-3xl font-bold text-slate-900 uppercase">{client?.name || client?.full_name}</h1>
+              <h1 className="text-3xl font-bold text-slate-900">{client?.name || client?.full_name}</h1>
+              <p className="text-slate-500 text-sm flex items-center gap-2">
+                 <MessageSquare size={14}/> {client?.email || "Nessuna email"}
+              </p>
             </div>
           </div>
-          <button onClick={createProgram} className="bg-slate-900 text-white px-5 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-black transition active:scale-95">
+          <button
+            onClick={createProgram}
+            className="bg-slate-900 text-white px-5 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-black transition active:scale-95"
+          >
             <Plus size={20} /> NUOVA SCHEDA
           </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
-            {/* COLONNA SCHEDE */}
+            {/* COLONNA SINISTRA: LISTA SCHEDE */}
             <div className="lg:col-span-2 space-y-6">
                 <h2 className="text-lg font-bold text-slate-700 flex items-center gap-2">
                     <Dumbbell size={20}/> Schede Allenamento
@@ -109,12 +159,12 @@ export default function ClientPage({ params }) {
                 
                 {programs.length === 0 ? (
                     <div className="bg-white p-8 rounded-2xl border border-dashed border-slate-300 text-center text-slate-400">
-                        Nessuna scheda. Clicca su "Nuova Scheda".
+                        Nessuna scheda attiva. Clicca su "Nuova Scheda" per iniziare.
                     </div>
                 ) : (
                     <div className="grid gap-4">
                         {programs.map((prog) => (
-                            <div key={prog.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 group hover:border-blue-400 transition-all">
+                            <div key={prog.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-center group hover:border-blue-400 transition-all">
                                 <div>
                                     <h3 className="font-bold text-lg text-slate-800">{prog.title}</h3>
                                     <div className="flex items-center gap-3 text-xs text-slate-500 mt-1 uppercase font-bold tracking-wide">
@@ -123,22 +173,26 @@ export default function ClientPage({ params }) {
                                     </div>
                                 </div>
                                 
-                                {/* TASTI AZIONE RIPRISTINATI */}
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <button onClick={() => router.push(`/admin/editor/${prog.id}`)} className="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200 transition text-xs">
+                                <div className="flex items-center gap-2">
+                                    <button 
+                                        onClick={() => router.push(`/admin/editor/${prog.id}`)}
+                                        className="px-4 py-2 bg-blue-50 text-blue-600 font-bold rounded-lg hover:bg-blue-100 transition text-sm"
+                                    >
                                         MODIFICA
                                     </button>
-                                    
-                                    <button onClick={() => window.open(`/live/${prog.id}`, '_blank')} className="px-3 py-2 bg-green-50 text-green-600 font-bold rounded-lg hover:bg-green-100 transition text-xs flex items-center gap-1">
-                                        <ExternalLink size={14}/> APRI LIVE
+                                    <button 
+                                        onClick={() => copyLink(prog.id)}
+                                        className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                                        title="Copia Link Atleta"
+                                    >
+                                        <ExternalLink size={20}/>
                                     </button>
-
-                                    <button onClick={() => copyLink(prog.id)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Copia Link">
-                                        <Copy size={18}/>
-                                    </button>
-
-                                    <button onClick={() => deleteProgram(prog.id)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Elimina">
-                                        <Trash2 size={18}/>
+                                    <button 
+                                        onClick={() => deleteProgram(prog.id)}
+                                        className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+                                        title="Elimina Scheda"
+                                    >
+                                        <Trash2 size={20}/>
                                     </button>
                                 </div>
                             </div>
@@ -147,7 +201,7 @@ export default function ClientPage({ params }) {
                 )}
             </div>
 
-            {/* COLONNA FEED ATTIVITÀ */}
+            {/* COLONNA DESTRA: MONITORAGGIO LIVE (FEED) */}
             <div className="space-y-6">
                 <h2 className="text-lg font-bold text-slate-700 flex items-center gap-2">
                     <Activity size={20} className="text-green-600"/> Attività Recente
@@ -161,6 +215,7 @@ export default function ClientPage({ params }) {
                     ) : (
                         <div className="space-y-3">
                             {recentLogs.map((log) => {
+                                // Formattiamo i dati grezzi per la vista
                                 const reps = (log.actual_reps || "").split('-').join(', ');
                                 const weights = (log.actual_weight || "").split('-').join(', ');
 
@@ -172,6 +227,7 @@ export default function ClientPage({ params }) {
                                                 {log.day_label} • W{log.week_number}
                                             </span>
                                         </div>
+                                        
                                         <div className="text-slate-600 mb-2 font-mono text-xs">
                                             <div className="flex justify-between border-b border-slate-100 pb-1 mb-1">
                                                 <span>Reps:</span> <span className="font-bold text-slate-900">{reps}</span>
@@ -180,10 +236,18 @@ export default function ClientPage({ params }) {
                                                 <span>Carico:</span> <span className="font-bold text-green-600">{weights} Kg</span>
                                             </div>
                                         </div>
+
                                         {log.athlete_notes && (
-                                            <div className="bg-yellow-50 text-yellow-800 p-2 rounded-lg text-xs italic border border-yellow-100">"{log.athlete_notes}"</div>
+                                            <div className="bg-yellow-50 text-yellow-800 p-2 rounded-lg text-xs italic border border-yellow-100">
+                                                "{log.athlete_notes}"
+                                            </div>
                                         )}
-                                        <div className="text-right mt-2"><span className="text-[10px] text-slate-300">{new Date(log.created_at).toLocaleString()}</span></div>
+                                        
+                                        <div className="text-right mt-2">
+                                            <span className="text-[10px] text-slate-300">
+                                                {new Date(log.created_at).toLocaleString()}
+                                            </span>
+                                        </div>
                                     </div>
                                 );
                             })}
