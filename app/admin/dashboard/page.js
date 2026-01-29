@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import { Plus, Users, ChevronRight, LogOut, User } from "lucide-react";
@@ -13,7 +13,7 @@ export default function AdminDashboard() {
   const supabaseKey =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
 
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  const supabase = useMemo(() => createClient(supabaseUrl, supabaseKey), []);
 
   const [clients, setClients] = useState([]);
   const [trainerName, setTrainerName] = useState("");
@@ -27,29 +27,38 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
 
-    const { data: { user }, error: userErr } = await supabase.auth.getUser();
-    if (userErr || !user) {
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    const user = authData?.user;
+
+    if (authErr || !user) {
       router.push("/");
       return;
     }
 
-    setTrainerName(user.user_metadata?.first_name || user.email?.split("@")[0] || "Coach");
+    setTrainerName(user.user_metadata?.first_name || user.email.split("@")[0]);
 
+    // ✅ qui NON selezionare "name" se non esiste
     const { data, error } = await supabase
       .from("clients")
-      .select("*")
+      .select("id, created_at, full_name, email, phone") // aggiungi altre colonne se ti servono
       .order("created_at", { ascending: false });
 
-    if (!error) setClients(data || []);
+    if (error) {
+      alert("Errore DB: " + error.message);
+      setClients([]);
+    } else {
+      setClients(data || []);
+    }
+
     setLoading(false);
   };
 
-  // ✅ RINOMINATA: niente più collisione con createClient di Supabase
-  const handleCreateClient = async () => {
-    const name = prompt("Nome nuovo atleta:");
-    if (!name) return;
+  const createClient = async () => {
+    const fullName = prompt("Nome nuovo atleta:");
+    if (!fullName) return;
 
-    const { error } = await supabase.from("clients").insert([{ name }]);
+    // ✅ la tabella ha full_name, non name
+    const { error } = await supabase.from("clients").insert([{ full_name: fullName }]);
 
     if (error) {
       alert("Errore DB: " + error.message);
@@ -86,6 +95,7 @@ export default function AdminDashboard() {
         <button
           onClick={handleLogout}
           className="p-2 bg-slate-800 rounded-full hover:bg-red-500 hover:text-white transition"
+          title="Logout"
         >
           <LogOut size={18} />
         </button>
@@ -99,27 +109,44 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <div className="grid gap-3">
-            {clients.map((client) => (
-              <div
-                key={client.id}
-                onClick={() => router.push(`/admin/clients/${client.id}`)}
-                className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center cursor-pointer hover:border-blue-500 hover:shadow-md transition-all"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 font-bold text-xl text-blue-600">
-                    {String(client.name || "?").charAt(0).toUpperCase()}
+            {clients.map((client) => {
+              const displayName = client.full_name || "Senza nome";
+              const initial = displayName.trim().charAt(0).toUpperCase() || "?";
+
+              return (
+                <div
+                  key={client.id}
+                  onClick={() => router.push(`/admin/clients/${client.id}`)}
+                  className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center cursor-pointer hover:border-blue-500 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 font-bold text-xl text-blue-600">
+                      {initial}
+                    </div>
+
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-lg text-slate-800 truncate">
+                        {displayName}
+                      </h3>
+                      {(client.email || client.phone) && (
+                        <div className="text-xs text-slate-500 truncate">
+                          {client.email || client.phone}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <h3 className="font-bold text-lg text-slate-800">{client.name}</h3>
+
+                  <ChevronRight className="text-slate-300" />
                 </div>
-                <ChevronRight className="text-slate-300" />
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
         <button
-          onClick={handleCreateClient}
+          onClick={createClient}
           className="fixed bottom-8 right-8 bg-blue-600 text-white w-16 h-16 rounded-full shadow-2xl flex items-center justify-center hover:scale-110 hover:bg-blue-500 transition-all"
+          title="Aggiungi atleta"
         >
           <Plus size={32} />
         </button>
