@@ -40,7 +40,6 @@ export default function EditorPage() {
     const { data: prog } = await supabase.from('programs').select('*').eq('id', id).single();
     if (prog) setProgram(prog);
 
-    // Caricamento esercizi ordinati per creazione
     const { data: ex } = await supabase.from('exercises').select('*').eq('program_id', id).order('created_at', { ascending: true });
     
     if (ex && ex.length > 0) {
@@ -56,8 +55,6 @@ export default function EditorPage() {
         });
         
         setExercises(normalizedEx);
-
-        // ✅ FIX: Rimosso .sort() per mantenere l'ordine di creazione dei giorni
         const uniqueDays = [...new Set(ex.map(item => item.day || 'Giorno A'))];
         setDays(uniqueDays);
         if (uniqueDays.length > 0) setActiveDay(uniqueDays[0]);
@@ -105,10 +102,7 @@ export default function EditorPage() {
   const renameDay = () => {
       const newName = prompt(`Rinomina "${activeDay}" in:`, activeDay);
       if(!newName || newName === activeDay) return;
-      
-      // Aggiorna array giorni mantenendo l'ordine
       setDays(days.map(d => d === activeDay ? newName : d));
-      // Aggiorna gli esercizi
       setExercises(exercises.map(e => (e.day || 'Giorno A') === activeDay ? { ...e, day: newName } : e));
       setActiveDay(newName);
   };
@@ -116,14 +110,12 @@ export default function EditorPage() {
   const renameProgram = async () => {
       const newTitle = prompt("Nuovo nome della scheda:", program.title);
       if(!newTitle || newTitle === program.title) return;
-
       setProgram({ ...program, title: newTitle });
       await supabase.from('programs').update({ title: newTitle }).eq('id', id);
   };
 
   const copyCurrentWeekToAll = () => {
       if(!confirm(`Vuoi copiare i parametri della Settimana ${viewWeek} su TUTTE le altre settimane per questo giorno?`)) return;
-
       const updatedExercises = exercises.map(ex => {
           if ((ex.day || 'Giorno A') === activeDay) {
               const sourceData = ex.progression[viewWeek];
@@ -160,23 +152,17 @@ export default function EditorPage() {
 
     setSaving(true);
 
-    // --- AUTOMAZIONE NOME COACH ---
-    // Recupera l'utente loggato per "firmare" la scheda
     const { data: { user } } = await supabase.auth.getUser();
     
     let autoCoachName = "COACH";
-    if (user) {
-        const meta = user.user_metadata || {};
-        // Cerca in ordine: nome (come dashboard), full_name, prima parte email
-        autoCoachName = meta.name || meta.full_name || meta.first_name || user.email?.split('@')[0] || "COACH";
+    if (user && user.user_metadata) {
+        // Cerca specificamente il campo 'name' o 'full_name' che Supabase usa per "Prima"
+        autoCoachName = user.user_metadata.name || user.user_metadata.full_name || user.email.split('@')[0];
     }
 
-    // Salva il nome automaticamente nel DB
     await supabase.from('programs').update({ coach_name: autoCoachName }).eq('id', id);
 
-    // --- SALVATAGGIO ESERCIZI ---
     await supabase.from('exercises').delete().eq('program_id', id);
-
     const toSave = exercises.map(ex => ({
         program_id: id,
         name: ex.name,
@@ -189,9 +175,8 @@ export default function EditorPage() {
     }));
 
     if (toSave.length > 0) {
-        const { error } = await supabase.from('exercises').insert(toSave);
-        if (error) alert("Errore: " + error.message);
-        else alert("Salvato! ✅");
+        await supabase.from('exercises').insert(toSave);
+        alert("Salvato! ✅");
     } else {
         alert("Scheda salvata (vuota).");
     }
@@ -215,15 +200,12 @@ export default function EditorPage() {
                   <p className="text-xs text-slate-500 font-bold uppercase">{program.duration} SETTIMANE</p>
               </div>
           </div>
-          {/* NESSUN INPUT MANUALE PER IL COACH QUI, FA TUTTO DA SOLO */}
           <button onClick={saveAll} disabled={saving} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow hover:bg-black transition">
               <Save size={18}/> {saving ? "..." : "SALVA"}
           </button>
       </div>
 
       <div className="max-w-4xl mx-auto">
-        
-        {/* SELETTORE GIORNO */}
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2 items-center">
             {days.map(day => (
                 <div key={day} className="relative group">
@@ -239,7 +221,6 @@ export default function EditorPage() {
             {days.length < 7 && <button onClick={addNewDay} className="px-3 py-2 rounded-lg border border-dashed border-slate-300 text-slate-400 hover:bg-white"><Plus size={16}/></button>}
         </div>
 
-        {/* SELETTORE SETTIMANA */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 mb-6 shadow-sm">
             <div className="flex justify-between items-center mb-3">
                 <span className="text-xs font-bold text-slate-400 uppercase">Stai modificando:</span>
@@ -260,12 +241,10 @@ export default function EditorPage() {
             </div>
         </div>
 
-        {/* LISTA ESERCIZI */}
         <div className="space-y-4">
             {currentExercises.map((ex, idx) => (
                 <div key={idx} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex gap-4 group">
                     <GripVertical className="text-slate-300 cursor-move mt-2"/>
-                    
                     <div className="flex-1 space-y-4">
                         <div className="flex gap-3 relative">
                             <div className="flex-1">
@@ -288,41 +267,25 @@ export default function EditorPage() {
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 bg-slate-50 p-3 rounded-lg">
                             <div>
                                 <label className="text-[9px] font-bold text-slate-400 uppercase">Serie</label>
-                                <input type="text" className="w-full font-bold bg-transparent outline-none" placeholder="3" 
-                                    value={ex.progression?.[viewWeek]?.sets || ''} 
-                                    onChange={(e) => updateProgression(ex, 'sets', e.target.value)}
-                                />
+                                <input type="text" className="w-full font-bold bg-transparent outline-none" placeholder="3" value={ex.progression?.[viewWeek]?.sets || ''} onChange={(e) => updateProgression(ex, 'sets', e.target.value)}/>
                             </div>
                             <div>
                                 <label className="text-[9px] font-bold text-slate-400 uppercase">Reps</label>
-                                <input type="text" className="w-full font-bold bg-transparent outline-none" placeholder="10" 
-                                    value={ex.progression?.[viewWeek]?.reps || ''} 
-                                    onChange={(e) => updateProgression(ex, 'reps', e.target.value)}
-                                />
+                                <input type="text" className="w-full font-bold bg-transparent outline-none" placeholder="10" value={ex.progression?.[viewWeek]?.reps || ''} onChange={(e) => updateProgression(ex, 'reps', e.target.value)}/>
                             </div>
                             <div>
                                 <label className="text-[9px] font-bold text-slate-400 uppercase">Carico Target</label>
-                                <input type="text" className="w-full font-bold bg-transparent outline-none" placeholder="facolt." 
-                                    value={ex.progression?.[viewWeek]?.weight || ''} 
-                                    onChange={(e) => updateProgression(ex, 'weight', e.target.value)}
-                                />
+                                <input type="text" className="w-full font-bold bg-transparent outline-none" placeholder="facolt." value={ex.progression?.[viewWeek]?.weight || ''} onChange={(e) => updateProgression(ex, 'weight', e.target.value)}/>
                             </div>
                             <div>
                                 <label className="text-[9px] font-bold text-slate-400 uppercase">Recupero</label>
-                                <input type="text" className="w-full font-bold text-blue-600 bg-transparent outline-none" placeholder='90"' 
-                                    value={ex.progression?.[viewWeek]?.rest || ''} 
-                                    onChange={(e) => updateProgression(ex, 'rest', e.target.value)}
-                                />
+                                <input type="text" className="w-full font-bold text-blue-600 bg-transparent outline-none" placeholder='90"' value={ex.progression?.[viewWeek]?.rest || ''} onChange={(e) => updateProgression(ex, 'rest', e.target.value)}/>
                             </div>
                             <div>
                                 <label className="text-[9px] font-bold text-slate-400 uppercase">RPE</label>
-                                <input type="text" className="w-full font-bold text-orange-500 bg-transparent outline-none" placeholder="1-10" 
-                                    value={ex.progression?.[viewWeek]?.rpe || ''} 
-                                    onChange={(e) => updateProgression(ex, 'rpe', e.target.value)}
-                                />
+                                <input type="text" className="w-full font-bold text-orange-500 bg-transparent outline-none" placeholder="1-10" value={ex.progression?.[viewWeek]?.rpe || ''} onChange={(e) => updateProgression(ex, 'rpe', e.target.value)}/>
                             </div>
                         </div>
-                        
                         <input type="text" className="w-full text-xs text-slate-500 bg-transparent outline-none border-b border-transparent focus:border-slate-300" placeholder="Note tecniche..." value={ex.notes || ''} onChange={(e) => updateNotes(ex, e.target.value)}/>
                     </div>
                 </div>

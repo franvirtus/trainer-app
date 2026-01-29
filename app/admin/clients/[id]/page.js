@@ -5,8 +5,8 @@ import { useState, useEffect, use } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import { 
-  ArrowLeft, Plus, Dumbbell, Calendar, Trash2, 
-  ExternalLink, Activity, Clock, Copy 
+  ArrowLeft, Plus, Dumbbell, Trash2, 
+  ExternalLink, Activity, Clock, Share2 
 } from "lucide-react";
 
 export default function ClientPage({ params }) {
@@ -14,8 +14,7 @@ export default function ClientPage({ params }) {
   const router = useRouter();
 
   const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
-  const supabaseKey =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
+  const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   const [client, setClient] = useState(null);
@@ -30,15 +29,12 @@ export default function ClientPage({ params }) {
   const fetchData = async () => {
     setLoading(true);
     
-    // Dati Cliente
     const { data: clientData } = await supabase.from("clients").select("*").eq("id", id).single();
     setClient(clientData);
 
-    // Schede
     const { data: programsData } = await supabase.from("programs").select("*").eq("client_id", id).order("created_at", { ascending: false });
     setPrograms(programsData || []);
 
-    // Log recenti
     if (programsData && programsData.length > 0) {
         const progIds = programsData.map(p => p.id);
         const { data: simpleLogs } = await supabase.from("workout_logs").select("*").in("program_id", progIds).order("created_at", { ascending: false }).limit(20);
@@ -74,8 +70,16 @@ export default function ClientPage({ params }) {
 
   const copyLink = (programId) => {
     const link = `${window.location.origin}/live/${programId}`;
-    navigator.clipboard.writeText(link);
-    alert("Link copiato! Invialo all'atleta.");
+    if (navigator.share) {
+        navigator.share({
+            title: 'Scheda Allenamento',
+            text: 'Ecco la tua nuova scheda!',
+            url: link,
+        }).catch(console.error);
+    } else {
+        navigator.clipboard.writeText(link);
+        alert("Link copiato! Invialo all'atleta.");
+    }
   };
 
   if (loading) return <div className="p-8 text-slate-500">Caricamento profilo...</div>;
@@ -84,7 +88,7 @@ export default function ClientPage({ params }) {
     <div className="min-h-screen bg-slate-50 font-sans p-6">
       <div className="max-w-5xl mx-auto space-y-8">
         
-        {/* HEADER CLIENTE (Senza email sotto il nome) */}
+        {/* HEADER CLIENTE */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button onClick={() => router.push("/admin/dashboard")} className="p-2 hover:bg-slate-200 rounded-full transition">
@@ -123,9 +127,8 @@ export default function ClientPage({ params }) {
                                     </div>
                                 </div>
                                 
-                                {/* TASTI AZIONE RIPRISTINATI */}
                                 <div className="flex items-center gap-2 flex-wrap">
-                                    <button onClick={() => router.push(`/admin/editor/${prog.id}`)} className="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200 transition text-xs">
+                                    <button onClick={() => router.push(`/admin/editor/${prog.id}`)} className="px-3 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200 transition text-xs">
                                         MODIFICA
                                     </button>
                                     
@@ -133,8 +136,9 @@ export default function ClientPage({ params }) {
                                         <ExternalLink size={14}/> APRI LIVE
                                     </button>
 
-                                    <button onClick={() => copyLink(prog.id)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Copia Link">
-                                        <Copy size={18}/>
+                                    {/* TASTO CONDIVIDI AGGIUNTO */}
+                                    <button onClick={() => copyLink(prog.id)} className="px-3 py-2 bg-blue-50 text-blue-600 font-bold rounded-lg hover:bg-blue-100 transition text-xs flex items-center gap-1">
+                                        <Share2 size={14}/> CONDIVIDI
                                     </button>
 
                                     <button onClick={() => deleteProgram(prog.id)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Elimina">
