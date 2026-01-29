@@ -47,14 +47,13 @@ export default function LivePage({ params }) {
       setProgram(prog);
 
       if (prog.client_id) {
-        // ✅ FIX: Selezioniamo TUTTO per evitare errori se 'full_name' non esiste ancora
+        // Seleziona tutto per sicurezza
         const { data: client } = await supabase
           .from("clients")
           .select("*") 
           .eq("id", prog.client_id)
           .single();
 
-        // Cerca il nome in qualsiasi campo disponibile
         if (client) setClientName(client.full_name || client.name || "");
       }
     }
@@ -252,24 +251,26 @@ export default function LivePage({ params }) {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-32">
+      {/* HEADER */}
       <div className="bg-slate-800/90 backdrop-blur sticky top-0 z-20 border-b border-slate-700 shadow-xl pt-4">
         <div className="px-4 max-w-md mx-auto">
           <div className="flex justify-between items-end mb-4">
             <div>
+              {/* NOME COACH */}
               <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-0.5 flex items-center gap-1">
-                {/* Nome Coach dal DB o fallback */}
                 <Dumbbell size={10} /> {program?.coach_name || "COACH"}
               </div>
               <h1 className="text-2xl font-bold text-white leading-none capitalize">{program?.title}</h1>
             </div>
 
+            {/* NOME ATLETA (Icona rimossa) */}
             {clientName && (
               <div className="text-right">
                 <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
                   ATLETA
                 </div>
                 <div className="text-sm font-bold text-slate-200 flex items-center gap-1 justify-end">
-                  {clientName} <User size={12} />
+                  {clientName}
                 </div>
               </div>
             )}
@@ -436,7 +437,11 @@ export default function LivePage({ params }) {
                 <div className="flex flex-col">
                   {/* HEADER CARD */}
                   <div className="p-5 border-b border-slate-700/50 bg-slate-800/40">
-                    <h3 className={`text-xl font-bold capitalize mb-1 ${isDone ? "text-green-500" : "text-white"}`}>
+                    <h3
+                      className={`text-xl font-bold capitalize mb-1 ${
+                        isDone ? "text-green-500" : "text-white"
+                      }`}
+                    >
                       {ex.name}
                     </h3>
                     {weekData.note && (
