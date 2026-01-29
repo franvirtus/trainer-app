@@ -37,10 +37,10 @@ export default function AdminDashboard() {
 
     setTrainerName(user.user_metadata?.first_name || user.email.split("@")[0]);
 
-    // ✅ qui NON selezionare "name" se non esiste
+    // IMPORTANTISSIMO: niente "name" se non esiste in tabella
     const { data, error } = await supabase
       .from("clients")
-      .select("id, created_at, full_name, email, phone") // aggiungi altre colonne se ti servono
+      .select("id, created_at, full_name, email, phone")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -53,11 +53,11 @@ export default function AdminDashboard() {
     setLoading(false);
   };
 
-  const createClient = async () => {
+  // RINOMINATA: NON deve chiamarsi createClient
+  const createAthlete = async () => {
     const fullName = prompt("Nome nuovo atleta:");
     if (!fullName) return;
 
-    // ✅ la tabella ha full_name, non name
     const { error } = await supabase.from("clients").insert([{ full_name: fullName }]);
 
     if (error) {
@@ -95,7 +95,7 @@ export default function AdminDashboard() {
         <button
           onClick={handleLogout}
           className="p-2 bg-slate-800 rounded-full hover:bg-red-500 hover:text-white transition"
-          title="Logout"
+          aria-label="Logout"
         >
           <LogOut size={18} />
         </button>
@@ -110,8 +110,8 @@ export default function AdminDashboard() {
         ) : (
           <div className="grid gap-3">
             {clients.map((client) => {
-              const displayName = client.full_name || "Senza nome";
-              const initial = displayName.trim().charAt(0).toUpperCase() || "?";
+              const displayName = (client.full_name || "").trim() || "Senza nome";
+              const initial = displayName.charAt(0).toUpperCase() || "?";
 
               return (
                 <div
@@ -120,22 +120,18 @@ export default function AdminDashboard() {
                   className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center cursor-pointer hover:border-blue-500 hover:shadow-md transition-all"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 font-bold text-xl text-blue-600">
+                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center font-bold text-xl text-blue-600">
                       {initial}
                     </div>
-
-                    <div className="min-w-0">
-                      <h3 className="font-bold text-lg text-slate-800 truncate">
-                        {displayName}
-                      </h3>
+                    <div>
+                      <h3 className="font-bold text-lg text-slate-800">{displayName}</h3>
                       {(client.email || client.phone) && (
-                        <div className="text-xs text-slate-500 truncate">
+                        <p className="text-xs text-slate-500 mt-0.5">
                           {client.email || client.phone}
-                        </div>
+                        </p>
                       )}
                     </div>
                   </div>
-
                   <ChevronRight className="text-slate-300" />
                 </div>
               );
@@ -144,9 +140,9 @@ export default function AdminDashboard() {
         )}
 
         <button
-          onClick={createClient}
+          onClick={createAthlete}
           className="fixed bottom-8 right-8 bg-blue-600 text-white w-16 h-16 rounded-full shadow-2xl flex items-center justify-center hover:scale-110 hover:bg-blue-500 transition-all"
-          title="Aggiungi atleta"
+          aria-label="Crea atleta"
         >
           <Plus size={32} />
         </button>
