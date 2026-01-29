@@ -47,10 +47,9 @@ export default function LivePage({ params }) {
       setProgram(prog);
 
       if (prog.client_id) {
-        // ✅ FIX: Cerca sia 'full_name' che 'name' per sicurezza
         const { data: client } = await supabase
           .from("clients")
-          .select("full_name, name") 
+          .select("full_name, name")
           .eq("id", prog.client_id)
           .single();
 
@@ -154,7 +153,6 @@ export default function LivePage({ params }) {
   const saveLog = async (ex) => {
     for (let i = 0; i < setLogsData.length; i++) {
       const row = setLogsData[i];
-      // Controllo più permissivo: basta che non sia vuoto
       if (!row.reps || !row.weight) {
         alert(`Errore Set ${i + 1}: Inserisci tutti i valori.`);
         return;
@@ -234,14 +232,11 @@ export default function LivePage({ params }) {
     closeEdit();
   };
 
-  // ✅ NUOVA FUNZIONE PER LO STORICO COMPLETO
   const formatHistory = (history) => {
-      const reps = String(history.actual_reps || "").split("-");
-      const weight = String(history.actual_weight || "").split("-");
-      // Se c'è solo un set
-      if(reps.length === 1) return `${reps[0]} reps @ ${weight[0]} kg`;
-      // Se ci sono più set, mostriamo la sequenza
-      return `${reps.join("-")} reps @ ${weight.join("-")} kg`;
+    const reps = String(history.actual_reps || "").split("-");
+    const weight = String(history.actual_weight || "").split("-");
+    if (reps.length === 1) return `${reps[0]} reps @ ${weight[0]} kg`;
+    return `${reps.join("-")} reps @ ${weight.join("-")} kg`;
   };
 
   const currentExercises = exercises.filter((ex) => (ex.day || "Giorno A") === activeDay);
@@ -338,7 +333,7 @@ export default function LivePage({ params }) {
             <div
               key={index}
               className={`rounded-2xl border transition-all overflow-hidden relative ${
-                isDone ? "bg-green-900/10 border-green-800/30" : "bg-slate-800 border-slate-700"
+                isDone ? "bg-slate-900/50 border-green-800/50 shadow-lg shadow-green-900/10" : "bg-slate-800 border-slate-700"
               }`}
             >
               {isEditing ? (
@@ -374,7 +369,7 @@ export default function LivePage({ params }) {
                           placeholder={weekData.reps}
                           value={row.reps}
                           onChange={(e) => updateRow(i, "reps", e.target.value)}
-                          className="w-24 h-9 bg-slate-950 border border-slate-700 rounded-md text-center text-white font-bold text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-700"
+                          className="w-24 h-10 bg-slate-950 border border-slate-700 rounded-lg text-center text-white font-bold text-lg outline-none focus:border-blue-500 transition-all placeholder:text-slate-700"
                         />
 
                         <input
@@ -383,14 +378,14 @@ export default function LivePage({ params }) {
                           placeholder={weekData.weight || "-"}
                           value={row.weight}
                           onChange={(e) => updateRow(i, "weight", e.target.value)}
-                          className="w-28 h-9 bg-slate-950 border border-slate-700 rounded-md text-center text-yellow-400 font-bold text-sm outline-none focus:border-blue-500 transition-all placeholder:text-slate-700"
+                          className="w-28 h-10 bg-slate-950 border border-slate-700 rounded-lg text-center text-yellow-400 font-bold text-lg outline-none focus:border-blue-500 transition-all placeholder:text-slate-700"
                         />
 
                         <button
                           onClick={() => removeSetRow(i)}
-                          className="w-8 h-8 flex items-center justify-center rounded-md bg-slate-700 text-slate-300 hover:bg-red-900/40 hover:text-red-300 transition"
+                          className="w-10 h-10 flex items-center justify-center rounded-lg bg-slate-700 text-slate-300 hover:bg-red-900/40 hover:text-red-300 transition"
                         >
-                          <X size={14} />
+                          <X size={16} />
                         </button>
                       </div>
                     ))}
@@ -409,7 +404,7 @@ export default function LivePage({ params }) {
                         onClick={() => deleteLog(ex)}
                         className="py-2 px-3 rounded border border-red-700/50 text-red-300 text-xs font-bold hover:bg-red-900/20 transition flex items-center justify-center gap-1"
                       >
-                        <Trash2 size={14} /> ELIMINA LOG
+                        <Trash2 size={14} /> ELIMINA
                       </button>
                     )}
                   </div>
@@ -436,8 +431,13 @@ export default function LivePage({ params }) {
                 </div>
               ) : (
                 <div className="flex flex-col">
+                  {/* HEADER CARD */}
                   <div className="p-5 border-b border-slate-700/50 bg-slate-800/40">
-                    <h3 className={`text-xl font-bold capitalize mb-1 ${isDone ? "text-green-400" : "text-white"}`}>
+                    <h3
+                      className={`text-xl font-bold capitalize mb-1 ${
+                        isDone ? "text-green-500" : "text-white"
+                      }`}
+                    >
                       {ex.name}
                     </h3>
                     {weekData.note && (
@@ -447,68 +447,88 @@ export default function LivePage({ params }) {
                     )}
                   </div>
 
+                  {/* TARGET GRID */}
                   <div className="grid grid-cols-4 divide-x divide-slate-700/50 bg-slate-800/20 border-b border-slate-700/50">
                     <div className="p-3 text-center">
-                      <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Serie</span>
+                      <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">
+                        Serie
+                      </span>
                       <div className="text-white font-bold text-sm">
                         {weekData.sets} <span className="text-slate-500">x</span> {weekData.reps}
                       </div>
                     </div>
 
                     <div className="p-3 text-center">
-                      <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Carico</span>
+                      <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">
+                        Carico
+                      </span>
                       <div className="text-yellow-400 font-bold text-sm">
-                        {weekData.weight ? `${weekData.weight}` : "-"}{" "}
-                        <span className="text-[10px] text-yellow-600">Kg</span>
+                        {weekData.weight ? `${weekData.weight}` : "-"}
+                        <span className="text-[10px] text-yellow-600 ml-0.5">Kg</span>
                       </div>
                     </div>
 
                     <div className="p-3 text-center">
-                      <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">RPE</span>
-                      <div className="text-orange-400 font-bold text-sm">{weekData.rpe || "-"}</div>
+                      <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">
+                        RPE
+                      </span>
+                      <div className="text-orange-400 font-bold text-sm">
+                        {weekData.rpe || "-"}
+                      </div>
                     </div>
 
                     <div className="p-3 text-center">
-                      <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Recupero</span>
-                      <div className="text-blue-400 font-bold text-sm">{weekData.rest || "-"}</div>
+                      <span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">
+                        Recupero
+                      </span>
+                      <div className="text-blue-400 font-bold text-sm">
+                        {weekData.rest || "-"}
+                      </div>
                     </div>
                   </div>
 
+                  {/* SEZIONE "SET ESEGUITI" (REPLICA FOTO) */}
                   {isDone && (
-                    <div className="bg-green-900/10 p-4">
-                      <div className="flex justify-between text-[10px] uppercase font-bold text-green-700/70 mb-2 border-b border-green-800/30 pb-1">
-                        <span>Set Eseguiti</span>
-                        <span>Carico</span>
+                    <div className="bg-slate-900/30 p-4">
+                      {/* NUOVA INTESTAZIONE 3 COLONNE (SET | REPS | KG) */}
+                      <div className="flex text-[10px] uppercase font-bold text-green-600/80 mb-2 border-b border-green-900/20 pb-1">
+                         <span className="w-8">Set</span>
+                         <span className="flex-1 text-center">Reps</span>
+                         <span className="flex-1 text-right">Kg</span>
                       </div>
+
                       <div className="space-y-1 mb-3">
                         {savedReps.map((r, i) => (
-                          <div key={i} className="flex justify-between text-sm font-mono items-center">
-                            <span className="text-green-300/60 w-6 font-bold">#{i + 1}</span>
-                            <div className="flex gap-4">
-                              <span className="font-bold text-white">{r} reps</span>
-                              <span className="text-green-400 font-bold w-16 text-right">
-                                {savedWeight[i] || "-"} Kg
-                              </span>
-                            </div>
+                          <div
+                            key={i}
+                            className="flex text-sm font-mono items-center"
+                          >
+                            <span className="text-green-500/70 w-8 font-bold">#{i + 1}</span>
+                            <span className="flex-1 text-center font-bold text-white">
+                                {r}
+                            </span>
+                            <span className="flex-1 text-right text-green-400 font-bold">
+                                {savedWeight[i] || "-"}
+                            </span>
                           </div>
                         ))}
                       </div>
+                      
                       {logData?.notes && (
-                        <div className="text-xs text-green-200/60 italic border-t border-green-800/30 pt-2">
+                        <div className="text-xs text-green-200/50 italic border-t border-green-900/20 pt-2 mt-2">
                           "{logData.notes}"
                         </div>
                       )}
                     </div>
                   )}
 
-                  {/* ✅ STORICO COMPLETO */}
+                  {/* STORICO (VISUALE FOTO 4) */}
                   {history && !isDone && (
-                    <div className="bg-slate-900/40 p-3 border-t border-slate-800/50 flex flex-col gap-1 text-xs px-5">
-                      <span className="text-slate-500 font-bold flex items-center gap-1 uppercase text-[10px]">
-                        <History size={10} /> Settimana Scorsa
+                    <div className="bg-slate-900/40 p-4 border-t border-slate-800/50 flex justify-between items-center text-xs">
+                      <span className="text-slate-500 font-bold flex items-center gap-2 uppercase text-[10px]">
+                        <History size={12} /> Settimana Scorsa
                       </span>
-                      <span className="text-slate-300 font-mono tracking-wide">
-                        {/* Qui usiamo la funzione per mostrare tutto */}
+                      <span className="text-slate-300 font-mono tracking-wide text-right">
                         {formatHistory(history)}
                       </span>
                     </div>
@@ -517,31 +537,4 @@ export default function LivePage({ params }) {
                   <div className="p-3">
                     <button
                       onClick={() => openEdit(ex.name, logData)}
-                      className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all active:scale-95 gap-2 shadow-lg ${
-                        isDone
-                          ? "bg-slate-800 border border-slate-700 text-slate-300 hover:text-white"
-                          : "bg-blue-600 text-white hover:bg-blue-500 shadow-blue-900/20"
-                      }`}
-                    >
-                      {isDone ? (
-                        <>
-                          <Edit2 size={16} /> MODIFICA DATI
-                        </>
-                      ) : (
-                        <>
-                          <Activity size={16} /> INSERISCI RISULTATI
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        <div className="h-20"></div>
-      </div>
-    </div>
-  );
-}
+                      className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all active:scale-95 gap-2 shadow-lg border ${
