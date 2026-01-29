@@ -81,10 +81,6 @@ for (const item of ex) {
 
 setAvailableDays(uniqueDays);
 
-if (!activeDay) setActiveDay(uniqueDays[0]);
-
-      setAvailableDays(uniqueDays);
-
       if (!activeDay) setActiveDay(uniqueDays[0]);
 
       const { data: savedLogs } = await supabase
