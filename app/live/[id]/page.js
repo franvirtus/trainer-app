@@ -315,7 +315,7 @@ export default function LivePage({ params }) {
             <Info size={16} className="shrink-0 mt-0.5" />
             <div>
               <span className="font-bold text-blue-400 uppercase text-[10px] block">
-                Obiettivo Mesociclo:
+                Obiettivo:
               </span>
               {program.notes}
             </div>

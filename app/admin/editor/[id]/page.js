@@ -4,8 +4,7 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useParams, useRouter } from 'next/navigation';
-// Aggiunto 'User' agli import
-import { ArrowLeft, Save, Plus, Trash2, GripVertical, Copy, Edit3, User } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, GripVertical, Copy, Edit3 } from 'lucide-react';
 
 export default function EditorPage() {
   const params = useParams();
@@ -21,9 +20,6 @@ export default function EditorPage() {
   const [saving, setSaving] = useState(false);
   const [exerciseLibrary, setExerciseLibrary] = useState([]);
   
-  // --- NUOVO STATO PER IL NOME DEL COACH ---
-  const [coachName, setCoachName] = useState("");
-
   const [activeDay, setActiveDay] = useState('Giorno A');
   const [days, setDays] = useState(['Giorno A']);
   const [viewWeek, setViewWeek] = useState(1);
@@ -42,12 +38,9 @@ export default function EditorPage() {
 
   const loadData = async () => {
     const { data: prog } = await supabase.from('programs').select('*').eq('id', id).single();
-    if (prog) {
-        setProgram(prog);
-        // Carichiamo il nome del coach se esiste nel DB
-        setCoachName(prog.coach_name || "");
-    }
+    if (prog) setProgram(prog);
 
+    // Carichiamo gli esercizi ordinati per creazione
     const { data: ex } = await supabase.from('exercises').select('*').eq('program_id', id).order('created_at', { ascending: true });
     
     if (ex && ex.length > 0) {
@@ -63,9 +56,15 @@ export default function EditorPage() {
         });
         
         setExercises(normalizedEx);
-        const uniqueDays = [...new Set(ex.map(item => item.day || 'Giorno A'))].sort();
+
+        // ✅ FIX ORDINE GIORNI: 
+        // Prima era: [...new Set(...)].sort(); -> Questo causava l'ordine alfabetico indesiderato.
+        // Ora rimuoviamo .sort(). Poiché gli esercizi sono caricati per data creazione (.order('created_at')),
+        // i giorni appariranno nell'ordine in cui sono stati creati/assegnati.
+        const uniqueDays = [...new Set(ex.map(item => item.day || 'Giorno A'))];
+        
         setDays(uniqueDays);
-        setActiveDay(uniqueDays[0]);
+        if (uniqueDays.length > 0) setActiveDay(uniqueDays[0]);
     }
   };
 
@@ -110,8 +109,13 @@ export default function EditorPage() {
   const renameDay = () => {
       const newName = prompt(`Rinomina "${activeDay}" in:`, activeDay);
       if(!newName || newName === activeDay) return;
+      
+      // Aggiorniamo l'array dei giorni mantenendo l'ordine attuale
       setDays(days.map(d => d === activeDay ? newName : d));
+      
+      // Aggiorniamo il nome del giorno negli esercizi
       setExercises(exercises.map(e => (e.day || 'Giorno A') === activeDay ? { ...e, day: newName } : e));
+      
       setActiveDay(newName);
   };
 
@@ -147,7 +151,7 @@ export default function EditorPage() {
   
   const addNewDay = () => {
     if (days.length >= 7) return;
-    const nextChar = String.fromCharCode(65 + days.length);
+    const nextChar = String.fromCharCode(65 + days.length); // A, B, C...
     const newDay = `Giorno ${nextChar}`;
     setDays([...days, newDay]);
     setActiveDay(newDay);
@@ -162,11 +166,21 @@ export default function EditorPage() {
 
     setSaving(true);
 
-    // --- 1. SALVIAMO IL NOME DEL COACH ---
-    // Questo aggiorna la tabella 'programs' senza toccare gli esercizi
-    await supabase.from('programs').update({ coach_name: coachName }).eq('id', id);
+    // --- AUTOMAZIONE NOME COACH ---
+    // 1. Recuperiamo l'utente loggato
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    // 2. Determiniamo il nome da visualizzare (Nome completo o parte dell'email)
+    let autoCoachName = "COACH";
+    if (user) {
+        // Se nei metadati c'è il nome, usiamo quello, altrimenti la prima parte della mail
+        autoCoachName = user.user_metadata?.full_name || user.email?.split('@')[0] || "COACH";
+    }
 
-    // --- 2. SALVIAMO GLI ESERCIZI (Logica esistente) ---
+    // 3. Salviamo il nome nel programma AUTOMATICAMENTE
+    await supabase.from('programs').update({ coach_name: autoCoachName }).eq('id', id);
+
+    // --- SALVATAGGIO ESERCIZI ---
     await supabase.from('exercises').delete().eq('program_id', id);
 
     const toSave = exercises.map(ex => ({
@@ -204,18 +218,7 @@ export default function EditorPage() {
                   <h1 onClick={renameProgram} className="text-xl font-bold text-slate-800 flex items-center gap-2 cursor-pointer hover:text-blue-600 transition" title="Clicca per rinominare">
                       {program.title} <Edit3 size={16} className="text-slate-400"/>
                   </h1>
-                  
-                  {/* --- NUOVO CAMPO NOME COACH --- */}
-                  <div className="flex items-center gap-2 mt-1">
-                      <User size={12} className="text-slate-400"/>
-                      <input 
-                        type="text" 
-                        placeholder="Inserisci nome coach..." 
-                        className="text-xs font-bold text-slate-500 uppercase bg-transparent outline-none border-b border-transparent hover:border-slate-300 focus:border-blue-500 placeholder:text-slate-300 w-48 transition-colors"
-                        value={coachName}
-                        onChange={(e) => setCoachName(e.target.value)}
-                      />
-                  </div>
+                  <p className="text-xs text-slate-500 font-bold uppercase">{program.duration} SETTIMANE</p>
               </div>
           </div>
           <button onClick={saveAll} disabled={saving} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow hover:bg-black transition">
@@ -225,7 +228,7 @@ export default function EditorPage() {
 
       <div className="max-w-4xl mx-auto">
         
-        {/* SELETTORE GIORNO */}
+        {/* SELETTORE GIORNO (Senza ordinamento forzato) */}
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2 items-center">
             {days.map(day => (
                 <div key={day} className="relative group">
