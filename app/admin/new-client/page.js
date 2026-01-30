@@ -69,7 +69,13 @@ export default function NewClientPage() {
   <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
     <User size={12}/> Nome Completo *
   </label>
-  <input ... />
+  <input
+    type="text"
+    placeholder="Es. Giulia Verdi"
+    className="w-full p-3 border border-slate-200 rounded-xl font-bold text-lg focus:ring-2 focus:ring-blue-500 outline-none"
+    value={formData.full_name}
+    onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+  />
 </div>
 
 {/* SESSO + IMMAGINE */}
@@ -88,10 +94,6 @@ export default function NewClientPage() {
         <option value="F">Femmina</option>
         <option value="M">Maschio</option>
       </select>
-
-      <p className="text-xs text-slate-400 mt-2">
-        Serve per mostrare la sagoma corretta per le misure (step successivo).
-      </p>
     </div>
 
     <div className="border border-slate-200 rounded-xl bg-slate-50 flex items-center justify-center p-3">
@@ -103,6 +105,7 @@ export default function NewClientPage() {
     </div>
   </div>
 </div>
+
 
 {/* EMAIL + TELEFONO */}
 <div className="grid grid-cols-2 gap-4">
