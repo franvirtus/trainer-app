@@ -16,6 +16,7 @@ import {
   Save,
   Scale,
   PencilLine,
+  X,
 } from "lucide-react";
 
 export default function ClientPage({ params }) {
@@ -48,6 +49,12 @@ export default function ClientPage({ params }) {
   // peso (storico)
   const [newWeight, setNewWeight] = useState("");
   const [savingWeight, setSavingWeight] = useState(false);
+
+  // MODALE: nuova scheda (al posto di prompt)
+  const [showCreateProgram, setShowCreateProgram] = useState(false);
+  const [cpTitle, setCpTitle] = useState("");
+  const [cpDuration, setCpDuration] = useState(4);
+  const [creatingProgram, setCreatingProgram] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -111,7 +118,6 @@ export default function ClientPage({ params }) {
       .limit(12);
 
     if (mErr) {
-      // non blocco la pagina se manca la tabella o RLS
       console.error(mErr);
       setMetrics([]);
     } else {
@@ -190,7 +196,10 @@ export default function ClientPage({ params }) {
     setSavingWeight(false);
 
     if (updErr) {
-      alert("Peso salvato nello storico, ma errore aggiornando il profilo: " + updErr.message);
+      alert(
+        "Peso salvato nello storico, ma errore aggiornando il profilo: " +
+          updErr.message
+      );
       setNewWeight("");
       fetchData();
       return;
@@ -200,39 +209,61 @@ export default function ClientPage({ params }) {
     fetchData();
   };
 
+  // ---- CREAZIONE SCHEDA: MODALE ----
+  const openCreateProgram = () => {
+    setCpTitle("");
+    setCpDuration(4);
+    setCreatingProgram(false);
+    setShowCreateProgram(true);
+  };
+
+  const closeCreateProgram = () => {
+    setShowCreateProgram(false);
+    setCreatingProgram(false);
+  };
+
   const createProgram = async () => {
-  const title = prompt("Nome della nuova scheda:");
-  if (!title) return;
+    const title = (cpTitle || "").trim();
+    if (!title) {
+      alert("Inserisci il nome della scheda.");
+      return;
+    }
 
-  const durationStr = prompt("Durata (settimane)?", "4");
-  if (!durationStr) return;
+    const duration = Number(cpDuration);
+    if (!Number.isFinite(duration) || duration <= 0 || duration > 52) {
+      alert("Durata non valida (1-52).");
+      return;
+    }
 
-  const duration = Number(durationStr);
-  if (!Number.isFinite(duration) || duration <= 0 || duration > 52) {
-    alert("Durata non valida.");
-    return;
-  }
+    setCreatingProgram(true);
 
-  const { data: { user } } = await supabase.auth.getUser();
-  let coachName = "COACH";
-  if (user) {
-    coachName =
-      user.user_metadata?.name ||
-      user.user_metadata?.full_name ||
-      user.email?.split("@")[0] ||
-      "COACH";
-  }
+    const { data: auth } = await supabase.auth.getUser();
+    const user = auth?.user;
 
-  const { data, error } = await supabase
-    .from("programs")
-    .insert([{ client_id: id, title, coach_name: coachName, duration }])
-    .select()
-    .single();
+    let coachName = "COACH";
+    if (user) {
+      coachName =
+        user.user_metadata?.name ||
+        user.user_metadata?.full_name ||
+        user.email?.split("@")[0] ||
+        "COACH";
+    }
 
-  if (error) alert("Errore: " + error.message);
-  else router.push(`/admin/editor/${data.id}`);
-};
+    const { data, error } = await supabase
+      .from("programs")
+      .insert([{ client_id: id, title, coach_name: coachName, duration }])
+      .select()
+      .single();
 
+    if (error) {
+      setCreatingProgram(false);
+      alert("Errore: " + error.message);
+      return;
+    }
+
+    closeCreateProgram();
+    router.push(`/admin/editor/${data.id}`);
+  };
 
   const deleteProgram = async (programId) => {
     if (!confirm("Sei sicuro di voler eliminare questa scheda?")) return;
@@ -286,7 +317,7 @@ export default function ClientPage({ params }) {
           </div>
 
           <button
-            onClick={createProgram}
+            onClick={openCreateProgram}
             className="bg-slate-900 text-white px-5 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-black transition active:scale-95"
           >
             <Plus size={20} /> NUOVA SCHEDA
@@ -503,7 +534,7 @@ export default function ClientPage({ params }) {
             <div className="bg-slate-100 rounded-2xl p-4 h-[500px] overflow-y-auto border border-slate-200 relative">
               {recentLogs.length === 0 ? (
                 <div className="text-center text-slate-400 mt-10 text-sm">
-                  Ancora nessun dato registrato dall'atleta.
+                  Ancora nessun dato registrato dall&apos;atleta.
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -553,6 +584,94 @@ export default function ClientPage({ params }) {
           </div>
         </div>
       </div>
+
+      {/* MODALE: CREA NUOVA SCHEDA */}
+      {showCreateProgram && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/60"
+            onClick={closeCreateProgram}
+          />
+
+          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-slate-400 uppercase">Nuova scheda</div>
+                <div className="text-lg font-extrabold text-slate-900 leading-tight">
+                  Crea un programma per {displayName}
+                </div>
+              </div>
+              <button
+                onClick={closeCreateProgram}
+                className="p-2 rounded-full hover:bg-slate-100 text-slate-500"
+                aria-label="Chiudi"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 uppercase">
+                  Nome scheda *
+                </label>
+                <input
+                  value={cpTitle}
+                  onChange={(e) => setCpTitle(e.target.value)}
+                  placeholder="Es. Scheda forza base"
+                  className="mt-1 w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:bg-white focus:border-blue-500 font-bold text-slate-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-500 uppercase">
+                    Durata
+                  </label>
+                  <select
+                    value={cpDuration}
+                    onChange={(e) => setCpDuration(Number(e.target.value))}
+                    className="mt-1 w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:bg-white focus:border-blue-500 font-bold text-slate-900"
+                  >
+                    {Array.from({ length: 52 }, (_, i) => i + 1).map((w) => (
+                      <option key={w} value={w}>
+                        {w} settimane
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 flex flex-col justify-center">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase">
+                    Nota
+                  </div>
+                  <div className="text-sm font-bold text-slate-800">4 settimane = standard</div>
+                  <div className="text-xs text-slate-500">
+                    puoi sempre duplicare e modificare
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-slate-100 flex gap-3">
+              <button
+                onClick={closeCreateProgram}
+                className="flex-1 h-12 rounded-xl border border-slate-200 font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                disabled={creatingProgram}
+              >
+                Annulla
+              </button>
+              <button
+                onClick={createProgram}
+                className="flex-1 h-12 rounded-xl bg-slate-900 text-white font-extrabold hover:bg-black transition disabled:opacity-50"
+                disabled={creatingProgram}
+              >
+                {creatingProgram ? "Creazione..." : "Crea scheda"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
