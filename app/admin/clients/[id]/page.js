@@ -201,30 +201,38 @@ export default function ClientPage({ params }) {
   };
 
   const createProgram = async () => {
-    const title = prompt("Nome della nuova scheda:");
-    if (!title) return;
+  const title = prompt("Nome della nuova scheda:");
+  if (!title) return;
 
-    const { data: auth } = await supabase.auth.getUser();
-    const user = auth?.user;
+  const durationStr = prompt("Durata (settimane)?", "4");
+  if (!durationStr) return;
 
-    let coachName = "COACH";
-    if (user) {
-      coachName =
-        user.user_metadata?.name ||
-        user.user_metadata?.full_name ||
-        user.email?.split("@")[0] ||
-        "COACH";
-    }
+  const duration = Number(durationStr);
+  if (!Number.isFinite(duration) || duration <= 0 || duration > 52) {
+    alert("Durata non valida.");
+    return;
+  }
 
-    const { data, error } = await supabase
-      .from("programs")
-      .insert([{ client_id: id, title, coach_name: coachName, duration: 4 }])
-      .select()
-      .single();
+  const { data: { user } } = await supabase.auth.getUser();
+  let coachName = "COACH";
+  if (user) {
+    coachName =
+      user.user_metadata?.name ||
+      user.user_metadata?.full_name ||
+      user.email?.split("@")[0] ||
+      "COACH";
+  }
 
-    if (error) alert("Errore: " + error.message);
-    else router.push(`/admin/editor/${data.id}`);
-  };
+  const { data, error } = await supabase
+    .from("programs")
+    .insert([{ client_id: id, title, coach_name: coachName, duration }])
+    .select()
+    .single();
+
+  if (error) alert("Errore: " + error.message);
+  else router.push(`/admin/editor/${data.id}`);
+};
+
 
   const deleteProgram = async (programId) => {
     if (!confirm("Sei sicuro di voler eliminare questa scheda?")) return;
