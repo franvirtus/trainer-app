@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { Save, ArrowLeft, User, Mail, Phone, FileText } from 'lucide-react';
+import { Save, ArrowLeft, User, Mail, Phone, FileText, Users } from 'lucide-react';
 import Link from 'next/link';
 
 export default function NewClientPage() {
@@ -20,6 +20,7 @@ export default function NewClientPage() {
 
   const [formData, setFormData] = useState({
     full_name: '',
+    gender: 'F',   // default
     email: '',
     phone: '',
     notes: ''
@@ -63,6 +64,50 @@ export default function NewClientPage() {
                     onChange={(e) => setFormData({...formData, full_name: e.target.value})}
                 />
             </div>
+{/* NOME COMPLETO */}
+<div>
+  <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
+    <User size={12}/> Nome Completo *
+  </label>
+  <input ... />
+</div>
+
+{/* SESSO + IMMAGINE */}
+<div>
+  <label className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center gap-1">
+    <Users size={12}/> Sesso
+  </label>
+
+  <div className="grid grid-cols-2 gap-4">
+    <div>
+      <select
+        className="w-full p-3 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500 bg-white"
+        value={formData.gender}
+        onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+      >
+        <option value="F">Femmina</option>
+        <option value="M">Maschio</option>
+      </select>
+
+      <p className="text-xs text-slate-400 mt-2">
+        Serve per mostrare la sagoma corretta per le misure (step successivo).
+      </p>
+    </div>
+
+    <div className="border border-slate-200 rounded-xl bg-slate-50 flex items-center justify-center p-3">
+      <img
+        src={formData.gender === "M" ? "/body-male.png" : "/body-female.png"}
+        alt="Sagoma"
+        className="h-28 object-contain opacity-90"
+      />
+    </div>
+  </div>
+</div>
+
+{/* EMAIL + TELEFONO */}
+<div className="grid grid-cols-2 gap-4">
+  ...
+</div>
 
             <div className="grid grid-cols-2 gap-4">
                 <div>
