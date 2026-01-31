@@ -76,7 +76,7 @@ export default function AdminDashboard() {
   const openCreate = () => {
     setForm({
       full_name: "",
-      gender:"F",
+      gender: "F",
       email: "",
       phone: "",
       birth_date: "",
@@ -264,28 +264,28 @@ export default function AdminDashboard() {
                 />
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Sesso</label>
+                  <select
+                    value={form.gender}
+                    onChange={(e) => onChange("gender", e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500 bg-white"
+                  >
+                    <option value="F">Femmina</option>
+                    <option value="M">Maschio</option>
+                  </select>
+                </div>
 
-<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-  <div>
-    <label className="block text-sm font-bold text-slate-700 mb-1">Sesso</label>
-    <select
-      value={form.gender}
-      onChange={(e) => onChange("gender", e.target.value)}
-      className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500 bg-white"
-    >
-      <option value="F">Femmina</option>
-      <option value="M">Maschio</option>
-    </select>
-  </div>
+                <div className="border border-slate-200 rounded-xl bg-slate-50 flex items-center justify-center p-3">
+                  <img
+                    src={form.gender === "M" ? "/body-male.png" : "/body-female.png"}
+                    alt="Sagoma"
+                    className="h-24 object-contain opacity-90"
+                  />
+                </div>
+              </div>
 
-  <div className="border border-slate-200 rounded-xl bg-slate-50 flex items-center justify-center p-3">
-    <img
-      src={form.gender === "M" ? "/body-male.png" : "/body-female.png"}
-      alt="Sagoma"
-      className="h-24 object-contain opacity-90"
-    />
-  </div>
-</div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-1">Email</label>
