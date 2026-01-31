@@ -14,7 +14,6 @@ export default function LivePage({ params }) {
 
   const [program, setProgram] = useState(null);
   const [clientName, setClientName] = useState("");
-  const [coachName, setCoachName] = useState("");
   const [logs, setLogs] = useState({});
   const [historyLogs, setHistoryLogs] = useState({}); 
   const [loading, setLoading] = useState(true);
@@ -39,10 +38,7 @@ export default function LivePage({ params }) {
     if (error || !prog) { alert("Scheda non trovata"); setLoading(false); return; }
     setProgram(prog);
     
-    // NOME COACH
-    setCoachName(prog.coach_name || "Coach"); 
-
-    // NOME ATLETA
+    // FETCH NOME ATLETA
     if (prog.client_id) {
       const { data: client } = await supabase.from("clients").select("full_name").eq("id", prog.client_id).single();
       if (client) setClientName(client.full_name); 
@@ -61,7 +57,7 @@ export default function LivePage({ params }) {
     }
     setLogs(logsMap);
 
-    // LOGS SETTIMANA PRECEDENTE
+    // LOGS SETTIMANA PRECEDENTE (STORICO)
     if (activeWeek > 1) {
         const { data: prevLogs } = await supabase.from("workout_logs")
             .select("*").eq("program_id", id).eq("week_number", activeWeek - 1);
@@ -81,15 +77,9 @@ export default function LivePage({ params }) {
     setLoading(false);
   };
 
-  // --- LOGICA OVERRIDE SETTIMANALE ROBUSTA ---
   const getExerciseDisplay = (ex) => {
-      // 1. Se siamo in W1 o non c'è progressione, ritorna base
       if (activeWeek === 1 || !ex.progression) return ex;
-
-      // 2. Cerca override (gestisce sia chiave numerica che stringa)
       const override = ex.progression[activeWeek] || ex.progression[String(activeWeek)];
-
-      // 3. Se c'è override, uniscilo ai dati base. Altrimenti base.
       return override ? { ...ex, ...override } : ex;
   };
 
@@ -100,14 +90,13 @@ export default function LivePage({ params }) {
     return r.map((rep, i) => ({ reps: rep, weight: w[i] || "" }));
   };
 
-  const openEdit = (exName, dayName, existingData, targetReps) => {
+  const openEdit = (exName, dayName, existingData) => {
     const key = `${exName.trim()}_${dayName.trim()}`;
     setEditingKey(key);
     setNoteInput(existingData?.notes || "");
     if (existingData) {
       setSetLogsData(parseSetData(existingData.actual_reps, existingData.actual_weight));
     } else {
-      // Pre-popola placeholder ma lascia vuoto value
       setSetLogsData([{ reps: "", weight: "" }]);
     }
   };
@@ -162,21 +151,30 @@ export default function LivePage({ params }) {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-32">
-      <div className="bg-slate-800/90 backdrop-blur sticky top-0 z-20 border-b border-slate-700 shadow-xl pt-4">
+      
+      {/* HEADER PULITO */}
+      <div className="bg-slate-800/90 backdrop-blur sticky top-0 z-20 border-b border-slate-700 shadow-xl pt-6">
         <div className="px-4 max-w-md mx-auto">
-          <div className="flex justify-between items-end mb-4">
+          <div className="flex justify-between items-end mb-5">
             <div>
-              <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-0.5 flex items-center gap-1"><Dumbbell size={10} /> {coachName}</div>
-              <h1 className="text-2xl font-bold text-white leading-none capitalize">{program.title}</h1>
+              {/* ETICHETTA PROGRAMMA */}
+              <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                 PROGRAMMA
+              </div>
+              {/* TITOLO SCHEDA (Es. "Ret" o "Ipertrofia") */}
+              <h1 className="text-3xl font-black text-white leading-none capitalize tracking-tight">{program.title}</h1>
             </div>
+            
+            {/* NOME ATLETA */}
             {clientName && (
-              <div className="text-right">
-                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">ATLETA</div>
-                <div className="text-sm font-bold text-slate-200">{clientName}</div>
+              <div className="text-right pl-4">
+                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">ATLETA</div>
+                <div className="text-sm font-bold text-slate-200 leading-tight">{clientName}</div>
               </div>
             )}
           </div>
 
+          {/* BARRA SETTIMANE */}
           <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar">
             {Array.from({ length: program.duration || 4 }, (_, i) => i + 1).map((week) => (
               <button key={week} onClick={() => setActiveWeek(week)} className={`min-w-[45px] h-[45px] rounded-xl flex flex-col items-center justify-center border transition-all ${activeWeek === week ? "bg-blue-600 border-blue-500 text-white shadow-lg scale-105" : "bg-slate-800 border-slate-700 text-slate-400"}`}>
@@ -185,6 +183,7 @@ export default function LivePage({ params }) {
             ))}
           </div>
 
+          {/* BARRA GIORNI */}
           <div className="flex border-b border-slate-700 overflow-x-auto no-scrollbar">
             {days.map((day, idx) => (
               <button key={idx} onClick={() => setActiveDayIndex(idx)} className={`flex-1 py-3 px-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeDayIndex === idx ? "border-blue-500 text-white" : "border-transparent text-slate-500"}`}>{day.name}</button>
@@ -194,23 +193,23 @@ export default function LivePage({ params }) {
       </div>
 
       <div className="max-w-md mx-auto p-4 space-y-4">
+        {/* INFO SCHEDA & GIORNO */}
         {program.notes && <div className="bg-blue-900/20 border border-blue-800/50 p-4 rounded-xl text-sm text-blue-100 flex gap-2"><Info size={16} className="shrink-0 mt-0.5" /><div><span className="font-bold text-blue-400 uppercase text-[10px] block">Obiettivo:</span>{program.notes}</div></div>}
         {activeDay?.notes && <div className="bg-amber-900/20 border border-amber-800/50 p-3 rounded-xl text-sm text-amber-100 flex gap-2"><FileText size={16} className="shrink-0 mt-0.5 text-amber-500" /><div><span className="font-bold text-amber-500 uppercase text-[10px] block">Note del Giorno:</span>{activeDay.notes}</div></div>}
 
+        {/* LISTA ESERCIZI */}
         {(!activeDay || !activeDay.exercises || activeDay.exercises.length === 0) ? (
             <div className="text-center py-10 text-slate-500">Nessun esercizio.</div>
         ) : (
             activeDay.exercises.map((rawEx, index) => {
-                // --- APPLICAZIONE OVERRIDE SETTIMANALE ---
                 const ex = getExerciseDisplay(rawEx); 
-                
                 const key = `${ex.name.trim()}_${activeDay.name.trim()}`;
                 const logData = logs[key];
                 const historyData = historyLogs[key];
                 const isDone = !!logData;
                 const isEditing = editingKey === key;
 
-                // Controlla se i dati mostrati sono modificati per questa settimana
+                // Badge "Update" se ci sono modifiche specifiche per la settimana
                 const isModified = rawEx.progression && (rawEx.progression[activeWeek] || rawEx.progression[String(activeWeek)]);
 
                 return (
@@ -252,7 +251,7 @@ export default function LivePage({ params }) {
                                             <h3 className={`text-xl font-bold capitalize mb-1 ${isDone ? "text-green-500" : "text-white"}`}>{ex.name}</h3>
                                             {/* Badge se è una modifica specifica per la settimana */}
                                             {isModified && activeWeek > 1 && (
-                                                <span className="text-[9px] font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50">W{activeWeek} UPDATE</span>
+                                                <span className="text-[9px] font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50 mt-1 inline-block">W{activeWeek} TARGET</span>
                                             )}
                                         </div>
                                         {historyData && !isDone && (
@@ -290,7 +289,7 @@ export default function LivePage({ params }) {
                                 )}
 
                                 <div className="p-3">
-                                    <button onClick={() => openEdit(ex.name, activeDay.name, logData, ex.reps)} className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all gap-2 border ${isDone ? "bg-transparent border-slate-600 text-slate-300 hover:bg-slate-800" : "bg-blue-600 border-blue-600 text-white"}`}>
+                                    <button onClick={() => openEdit(ex.name, activeDay.name, logData)} className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all gap-2 border ${isDone ? "bg-transparent border-slate-600 text-slate-300 hover:bg-slate-800" : "bg-blue-600 border-blue-600 text-white"}`}>
                                         {isDone ? <><Edit2 size={16}/> MODIFICA</> : <><Activity size={16}/> INSERISCI DATI</>}
                                     </button>
                                 </div>
