@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect, use } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   ArrowLeft,
   Plus,
@@ -24,11 +24,11 @@ import {
 } from "lucide-react";
 
 // --- COMPONENTI UI ---
-const TabBtn = ({ id, activeTab, setActiveTab, icon: Icon, label }) => {
+const TabBtn = ({ id, activeTab, onClick, icon: Icon, label }) => {
   const active = activeTab === id;
   return (
     <button
-      onClick={() => setActiveTab(id)}
+      onClick={() => onClick(id)}
       className={`px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 transition-all duration-200 border ${
         active
           ? "bg-slate-900 text-white border-slate-900 shadow-lg transform scale-105"
@@ -68,6 +68,19 @@ const MeasureInput = ({ label, value, onChange, placeholder }) => (
 export default function ClientPage({ params }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
+  // --- GESTIONE TAB PERSISTENTE ---
+  // Legge la tab dall'URL o usa 'profile' come default
+  const activeTab = searchParams.get("tab") || "profile";
+
+  const setActiveTab = (tab) => {
+    // Aggiorna l'URL senza ricaricare la pagina (scroll false mantiene la posizione)
+    const params = new URLSearchParams(searchParams);
+    params.set("tab", tab);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   // --- CONFIGURAZIONE SUPABASE ---
   const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
@@ -81,9 +94,6 @@ export default function ClientPage({ params }) {
   const [metrics, setMetrics] = useState([]);
   const [bodyMeasuresHistory, setBodyMeasuresHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // --- STATO UI ---
-  const [activeTab, setActiveTab] = useState("profile"); // Default su Profilo
 
   // --- FORM STATI ---
   const [profile, setProfile] = useState({
@@ -261,9 +271,9 @@ export default function ClientPage({ params }) {
 
             {/* NAVIGAZIONE */}
             <div className="flex gap-2 mt-6 overflow-x-auto no-scrollbar pb-1">
-                <TabBtn id="profile" activeTab={activeTab} setActiveTab={setActiveTab} icon={User} label="Profilo & Misure" />
-                <TabBtn id="programs" activeTab={activeTab} setActiveTab={setActiveTab} icon={Dumbbell} label="Schede" />
-                <TabBtn id="activity" activeTab={activeTab} setActiveTab={setActiveTab} icon={Activity} label="Log Attività" />
+                <TabBtn id="profile" activeTab={activeTab} onClick={setActiveTab} icon={User} label="Profilo & Misure" />
+                <TabBtn id="programs" activeTab={activeTab} onClick={setActiveTab} icon={Dumbbell} label="Schede" />
+                <TabBtn id="activity" activeTab={activeTab} onClick={setActiveTab} icon={Activity} label="Log Attività" />
             </div>
           </div>
       </div>
@@ -272,7 +282,7 @@ export default function ClientPage({ params }) {
 
         {/* --- TAB 1: PROFILO UNIFICATO (ANAGRAFICA + MISURE) --- */}
         {activeTab === "profile" && (
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 
                 {/* COLONNA SINISTRA: ANAGRAFICA */}
                 <div className="xl:col-span-1 space-y-6">
@@ -389,7 +399,7 @@ export default function ClientPage({ params }) {
 
         {/* --- TAB 2: SCHEDE (CONDIVIDI RIPRISTINATO) --- */}
         {activeTab === "programs" && (
-            <div className="space-y-4">
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 {programs.length === 0 ? (
                     <div className="bg-white p-12 rounded-3xl border-2 border-dashed border-slate-200 text-center flex flex-col items-center">
                         <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 mb-4"><Dumbbell size={32}/></div>
@@ -427,7 +437,7 @@ export default function ClientPage({ params }) {
 
         {/* --- TAB 3: ATTIVITÀ (LOGS) --- */}
         {activeTab === "activity" && (
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <SectionTitle icon={ClipboardList} title="Registro Allenamenti" />
                 <div className="space-y-4">
                     {recentLogs.length === 0 ? <p className="text-slate-400 text-sm italic text-center py-10">Nessun log registrato finora.</p> : 
