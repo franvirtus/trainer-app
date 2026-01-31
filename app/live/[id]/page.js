@@ -14,6 +14,7 @@ export default function LivePage({ params }) {
 
   const [program, setProgram] = useState(null);
   const [clientName, setClientName] = useState("");
+  const [coachName, setCoachName] = useState("");
   const [logs, setLogs] = useState({});
   const [historyLogs, setHistoryLogs] = useState({}); 
   const [loading, setLoading] = useState(true);
@@ -37,10 +38,14 @@ export default function LivePage({ params }) {
     const { data: prog, error } = await supabase.from("programs").select("*").eq("id", id).single();
     if (error || !prog) { alert("Scheda non trovata"); setLoading(false); return; }
     setProgram(prog);
+    
+    // NOME COACH
+    setCoachName(prog.coach_name || "Coach"); 
 
+    // NOME ATLETA
     if (prog.client_id) {
       const { data: client } = await supabase.from("clients").select("full_name").eq("id", prog.client_id).single();
-      if (client) setClientName(client.full_name);
+      if (client) setClientName(client.full_name); 
     }
 
     // LOGS SETTIMANA CORRENTE
@@ -50,7 +55,6 @@ export default function LivePage({ params }) {
     const logsMap = {};
     if (savedLogs) {
       savedLogs.forEach((log) => {
-        // Uso trim() per sicurezza
         const key = `${log.exercise_name.trim()}_${log.day_label.trim()}`; 
         logsMap[key] = { ...log, notes: log.athlete_notes };
       });
@@ -77,6 +81,18 @@ export default function LivePage({ params }) {
     setLoading(false);
   };
 
+  // --- LOGICA OVERRIDE SETTIMANALE ROBUSTA ---
+  const getExerciseDisplay = (ex) => {
+      // 1. Se siamo in W1 o non c'è progressione, ritorna base
+      if (activeWeek === 1 || !ex.progression) return ex;
+
+      // 2. Cerca override (gestisce sia chiave numerica che stringa)
+      const override = ex.progression[activeWeek] || ex.progression[String(activeWeek)];
+
+      // 3. Se c'è override, uniscilo ai dati base. Altrimenti base.
+      return override ? { ...ex, ...override } : ex;
+  };
+
   const parseSetData = (repsString, weightString) => {
     if (!repsString) return [{ reps: "", weight: "" }];
     const r = String(repsString).split("-");
@@ -84,13 +100,14 @@ export default function LivePage({ params }) {
     return r.map((rep, i) => ({ reps: rep, weight: w[i] || "" }));
   };
 
-  const openEdit = (exName, dayName, existingData) => {
+  const openEdit = (exName, dayName, existingData, targetReps) => {
     const key = `${exName.trim()}_${dayName.trim()}`;
     setEditingKey(key);
     setNoteInput(existingData?.notes || "");
     if (existingData) {
       setSetLogsData(parseSetData(existingData.actual_reps, existingData.actual_weight));
     } else {
+      // Pre-popola placeholder ma lascia vuoto value
       setSetLogsData([{ reps: "", weight: "" }]);
     }
   };
@@ -130,13 +147,10 @@ export default function LivePage({ params }) {
     } else { alert("Errore: " + error.message); }
   };
 
-  // Helper per formattare lo storico
   const renderHistorySummary = (hist) => {
       if(!hist) return null;
-      const r = String(hist.actual_reps).split('-')[0]; // Prende solo il primo set per brevità o fai una media
+      const r = String(hist.actual_reps).split('-')[0];
       const w = String(hist.actual_weight).split('-')[0];
-      // Se vuoi mostrare tutto:
-      // return `${String(hist.actual_weight).replace(/-/g, '/')}kg x ${String(hist.actual_reps).replace(/-/g, '/')}`;
       return `${w}kg x ${r} reps`;
   };
 
@@ -148,13 +162,11 @@ export default function LivePage({ params }) {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-32">
-      
-      {/* HEADER */}
       <div className="bg-slate-800/90 backdrop-blur sticky top-0 z-20 border-b border-slate-700 shadow-xl pt-4">
         <div className="px-4 max-w-md mx-auto">
           <div className="flex justify-between items-end mb-4">
             <div>
-              <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-0.5 flex items-center gap-1"><Dumbbell size={10} /> {program.coach_name}</div>
+              <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-0.5 flex items-center gap-1"><Dumbbell size={10} /> {coachName}</div>
               <h1 className="text-2xl font-bold text-white leading-none capitalize">{program.title}</h1>
             </div>
             {clientName && (
@@ -188,12 +200,18 @@ export default function LivePage({ params }) {
         {(!activeDay || !activeDay.exercises || activeDay.exercises.length === 0) ? (
             <div className="text-center py-10 text-slate-500">Nessun esercizio.</div>
         ) : (
-            activeDay.exercises.map((ex, index) => {
+            activeDay.exercises.map((rawEx, index) => {
+                // --- APPLICAZIONE OVERRIDE SETTIMANALE ---
+                const ex = getExerciseDisplay(rawEx); 
+                
                 const key = `${ex.name.trim()}_${activeDay.name.trim()}`;
                 const logData = logs[key];
                 const historyData = historyLogs[key];
                 const isDone = !!logData;
                 const isEditing = editingKey === key;
+
+                // Controlla se i dati mostrati sono modificati per questa settimana
+                const isModified = rawEx.progression && (rawEx.progression[activeWeek] || rawEx.progression[String(activeWeek)]);
 
                 return (
                     <div key={index} className={`rounded-2xl border transition-all overflow-hidden relative ${isDone ? "bg-slate-900/50 border-green-900 shadow-sm" : "bg-slate-800 border-slate-700"}`}>
@@ -204,17 +222,12 @@ export default function LivePage({ params }) {
                                     <h3 className="text-lg font-bold text-white capitalize">{ex.name}</h3>
                                     <button onClick={closeEdit} className="p-2 bg-slate-700 rounded-full text-slate-400 hover:text-white"><X size={20}/></button>
                                 </div>
-                                
-                                {/* STORICO NEL POPUP */}
                                 {historyData && (
                                     <div className="mb-4 bg-slate-700/50 p-3 rounded-xl border border-slate-600/50 flex justify-between items-center">
                                         <div className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1"><History size={12}/> LAST SESSION (W{activeWeek-1})</div>
-                                        <div className="text-sm font-bold text-white bg-slate-600 px-2 py-1 rounded">
-                                            {renderHistorySummary(historyData)}
-                                        </div>
+                                        <div className="text-sm font-bold text-white bg-slate-600 px-2 py-1 rounded">{renderHistorySummary(historyData)}</div>
                                     </div>
                                 )}
-
                                 <div className="flex text-[10px] uppercase font-bold text-slate-500 mb-2 px-1">
                                     <span className="flex-1 text-center">Reps</span><span className="flex-1 text-center">Kg</span><span className="w-8"></span>
                                 </div>
@@ -235,9 +248,13 @@ export default function LivePage({ params }) {
                             <div className="flex flex-col">
                                 <div className="p-5 border-b border-slate-700/50 bg-slate-800/40">
                                     <div className="flex justify-between items-start">
-                                        <h3 className={`text-xl font-bold capitalize mb-1 ${isDone ? "text-green-500" : "text-white"}`}>{ex.name}</h3>
-                                        
-                                        {/* STORICO VISIBILE SUBITO NELLA CARD */}
+                                        <div>
+                                            <h3 className={`text-xl font-bold capitalize mb-1 ${isDone ? "text-green-500" : "text-white"}`}>{ex.name}</h3>
+                                            {/* Badge se è una modifica specifica per la settimana */}
+                                            {isModified && activeWeek > 1 && (
+                                                <span className="text-[9px] font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50">W{activeWeek} UPDATE</span>
+                                            )}
+                                        </div>
                                         {historyData && !isDone && (
                                             <div className="bg-slate-900 px-2 py-1 rounded border border-slate-600 text-[10px] text-slate-400 font-mono flex items-center gap-1">
                                                 <History size={10}/> Last: {renderHistorySummary(historyData)}
@@ -273,7 +290,7 @@ export default function LivePage({ params }) {
                                 )}
 
                                 <div className="p-3">
-                                    <button onClick={() => openEdit(ex.name, activeDay.name, logData)} className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all gap-2 border ${isDone ? "bg-transparent border-slate-600 text-slate-300" : "bg-blue-600 border-blue-600 text-white"}`}>
+                                    <button onClick={() => openEdit(ex.name, activeDay.name, logData, ex.reps)} className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all gap-2 border ${isDone ? "bg-transparent border-slate-600 text-slate-300 hover:bg-slate-800" : "bg-blue-600 border-blue-600 text-white"}`}>
                                         {isDone ? <><Edit2 size={16}/> MODIFICA</> : <><Activity size={16}/> INSERISCI DATI</>}
                                     </button>
                                 </div>
