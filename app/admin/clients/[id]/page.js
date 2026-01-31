@@ -33,7 +33,6 @@ const SectionTitle = ({ icon: Icon, title }) => (
   </h3>
 );
 
-// INPUT SENZA FRECCE (CSS Tailwind custom)
 const MeasureInput = ({ label, value, onChange, placeholder }) => (
   <div className="flex flex-col gap-1">
     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</label>
@@ -57,7 +56,6 @@ export default function ClientPage({ params }) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
-  // Tab Persistente
   const activeTab = searchParams.get("tab") || "profile";
   const setActiveTab = (tab) => {
     const params = new URLSearchParams(searchParams);
@@ -152,8 +150,19 @@ export default function ClientPage({ params }) {
   const createProgram = async () => {
     if (!cpTitle.trim()) return alert("Nome scheda obbligatorio");
     setCreatingProgram(true);
+    
+    // --- FIX DEFINITIVO NOME COACH ---
     const { data: { user } } = await supabase.auth.getUser();
-    const coachName = user?.user_metadata?.name || "COACH";
+    let coachName = "Coach";
+    
+    if (user) {
+        // Cerca ovunque: user_metadata.name, user_metadata.full_name, o email
+        const meta = user.user_metadata || {};
+        if (meta.full_name) coachName = meta.full_name;
+        else if (meta.name) coachName = meta.name;
+        else if (meta.first_name) coachName = `${meta.first_name} ${meta.last_name || ''}`.trim();
+        else if (user.email) coachName = user.email.split('@')[0];
+    }
     
     const { data, error } = await supabase.from("programs").insert([{ 
         client_id: id, 
@@ -188,12 +197,16 @@ export default function ClientPage({ params }) {
     <div className="min-h-screen bg-slate-50 font-sans pb-20">
       <div className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
           <div className="max-w-6xl mx-auto px-6 py-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between min-h-[48px]">
                 <div className="flex items-center gap-4">
                     <button onClick={() => router.push("/admin/dashboard")} className="p-2 hover:bg-slate-100 rounded-full transition text-slate-500"><ArrowLeft size={22} /></button>
                     <div><h1 className="text-2xl font-black text-slate-900 uppercase leading-none">{client?.full_name}</h1><span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Atleta</span></div>
                 </div>
-                <button onClick={() => setShowCreateProgram(true)} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-black transition transform active:scale-95 text-sm"><Plus size={18} /> <span className="hidden sm:inline">Nuova Scheda</span></button>
+                {activeTab === 'programs' && (
+                    <button onClick={() => setShowCreateProgram(true)} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-black transition transform active:scale-95 text-sm animate-in fade-in zoom-in duration-200">
+                        <Plus size={18} /> <span className="hidden sm:inline">Nuova Scheda</span>
+                    </button>
+                )}
             </div>
             <div className="flex gap-2 mt-6 overflow-x-auto no-scrollbar pb-1">
                 <TabBtn id="profile" activeTab={activeTab} onClick={setActiveTab} icon={User} label="Profilo & Misure" />
@@ -242,39 +255,7 @@ export default function ClientPage({ params }) {
                     <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
                         <SectionTitle icon={History} title="Storico Circonferenze" />
                         <div className="overflow-x-auto">
-                            {/* TABELLA STORICO CORRETTA E RIORDINATA */}
-                            <table className="w-full text-sm text-left">
-                                <thead className="text-[10px] text-slate-400 uppercase font-bold border-b border-slate-100 bg-slate-50/50">
-                                    <tr>
-                                        <th className="py-3 pl-3 rounded-tl-xl">Data</th>
-                                        <th className="py-3">Collo</th>
-                                        <th className="py-3">Petto</th>
-                                        <th className="py-3">Braccio</th>
-                                        <th className="py-3">Vita</th>
-                                        <th className="py-3">Fianchi</th>
-                                        <th className="py-3">Coscia</th>
-                                        <th className="py-3 rounded-tr-xl">Polpaccio</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50">
-                                    {bodyMeasuresHistory.length === 0 ? (
-                                        <tr><td colSpan="8" className="py-6 text-center text-slate-400 italic">Nessuna misurazione salvata.</td></tr>
-                                    ) : (
-                                        bodyMeasuresHistory.map(bm => (
-                                            <tr key={bm.id} className="hover:bg-slate-50 transition">
-                                                <td className="py-3 pl-3 font-bold text-slate-700">{new Date(bm.measured_at).toLocaleDateString()}</td>
-                                                <td className="py-3 text-slate-600 font-mono">{bm.neck_cm || "-"}</td>
-                                                <td className="py-3 text-slate-600 font-mono">{bm.chest_cm || "-"}</td>
-                                                <td className="py-3 text-slate-600 font-mono">{bm.arm_cm || "-"}</td>
-                                                <td className="py-3 text-slate-600 font-mono">{bm.waist_cm || "-"}</td>
-                                                <td className="py-3 text-slate-600 font-mono">{bm.hips_cm || "-"}</td>
-                                                <td className="py-3 text-slate-600 font-mono">{bm.thigh_cm || "-"}</td>
-                                                <td className="py-3 text-slate-600 font-mono">{bm.calf_cm || "-"}</td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
+                            <table className="w-full text-sm text-left"><thead className="text-[10px] text-slate-400 uppercase font-bold border-b border-slate-100 bg-slate-50/50"><tr><th className="py-3 pl-3 rounded-tl-xl">Data</th><th className="py-3">Collo</th><th className="py-3">Petto</th><th className="py-3">Braccio</th><th className="py-3">Vita</th><th className="py-3">Fianchi</th><th className="py-3">Coscia</th><th className="py-3 rounded-tr-xl">Polpaccio</th></tr></thead><tbody className="divide-y divide-slate-50">{bodyMeasuresHistory.length === 0 ? (<tr><td colSpan="8" className="py-6 text-center text-slate-400 italic">Nessuna misurazione salvata.</td></tr>) : (bodyMeasuresHistory.map(bm => (<tr key={bm.id} className="hover:bg-slate-50 transition"><td className="py-3 pl-3 font-bold text-slate-700">{new Date(bm.measured_at).toLocaleDateString()}</td><td className="py-3 text-slate-600 font-mono">{bm.neck_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.chest_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.arm_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.waist_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.hips_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.thigh_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.calf_cm || "-"}</td></tr>)))}</tbody></table>
                         </div>
                     </div>
                 </div>
@@ -286,7 +267,6 @@ export default function ClientPage({ params }) {
                     <div className="w-full">
                         <div className="flex items-center gap-2 mb-1"><h3 className="font-bold text-xl text-slate-900">{p.title}</h3><span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold uppercase rounded-md tracking-wider">Attiva</span></div>
                         <div className="flex items-center gap-4 text-xs text-slate-500 font-medium mb-3"><span className="flex items-center gap-1"><Clock size={14}/> {p.duration} Settimane</span><span className="flex items-center gap-1"><Calendar size={14}/> {new Date(p.created_at).toLocaleDateString()}</span></div>
-                        {/* VISUALIZZAZIONE NOTE SCHEDA */}
                         {p.notes && (
                             <div className="mb-4 bg-slate-50 p-3 rounded-xl border border-slate-100 flex gap-2 items-start">
                                 <FileText size={16} className="text-slate-400 mt-0.5 shrink-0"/>
