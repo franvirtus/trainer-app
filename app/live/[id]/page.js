@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect, use } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Info, Check, Plus, X, History, Trash2, Dumbbell, Edit2, Activity, FileText, ChevronDown, ArrowRight } from "lucide-react";
+import { Info, Check, Plus, X, History, Trash2, Dumbbell, Edit2, Activity, FileText } from "lucide-react";
 
 export default function LivePage({ params }) {
   const { id } = use(params);
@@ -15,13 +15,13 @@ export default function LivePage({ params }) {
   const [program, setProgram] = useState(null);
   const [clientName, setClientName] = useState("");
   const [logs, setLogs] = useState({});
-  const [historyLogs, setHistoryLogs] = useState({}); // LOG DELLA SETTIMANA SCORSA
+  const [historyLogs, setHistoryLogs] = useState({}); 
   const [loading, setLoading] = useState(true);
 
   const [activeWeek, setActiveWeek] = useState(1);
   const [activeDayIndex, setActiveDayIndex] = useState(0);
 
-  // POP-UP EDITING
+  // POP-UP
   const [editingKey, setEditingKey] = useState(null);
   const [setLogsData, setSetLogsData] = useState([{ reps: "", weight: "" }]);
   const [noteInput, setNoteInput] = useState("");
@@ -34,31 +34,30 @@ export default function LivePage({ params }) {
   const fetchData = async () => {
     setLoading(true);
 
-    // 1. Programma
     const { data: prog, error } = await supabase.from("programs").select("*").eq("id", id).single();
     if (error || !prog) { alert("Scheda non trovata"); setLoading(false); return; }
     setProgram(prog);
 
-    // 2. Cliente
     if (prog.client_id) {
       const { data: client } = await supabase.from("clients").select("full_name").eq("id", prog.client_id).single();
       if (client) setClientName(client.full_name);
     }
 
-    // 3. LOGS CORRENTI (Settimana Attiva)
+    // LOGS SETTIMANA CORRENTE
     const { data: savedLogs } = await supabase.from("workout_logs")
       .select("*").eq("program_id", id).eq("week_number", activeWeek);
 
     const logsMap = {};
     if (savedLogs) {
       savedLogs.forEach((log) => {
-        const key = `${log.exercise_name}_${log.day_label}`; 
+        // Uso trim() per sicurezza
+        const key = `${log.exercise_name.trim()}_${log.day_label.trim()}`; 
         logsMap[key] = { ...log, notes: log.athlete_notes };
       });
     }
     setLogs(logsMap);
 
-    // 4. LOGS STORICO (Settimana Precedente)
+    // LOGS SETTIMANA PRECEDENTE
     if (activeWeek > 1) {
         const { data: prevLogs } = await supabase.from("workout_logs")
             .select("*").eq("program_id", id).eq("week_number", activeWeek - 1);
@@ -66,7 +65,7 @@ export default function LivePage({ params }) {
         const historyMap = {};
         if (prevLogs) {
             prevLogs.forEach((log) => {
-                const key = `${log.exercise_name}_${log.day_label}`;
+                const key = `${log.exercise_name.trim()}_${log.day_label.trim()}`;
                 historyMap[key] = log;
             });
         }
@@ -78,7 +77,6 @@ export default function LivePage({ params }) {
     setLoading(false);
   };
 
-  // --- LOGICA ---
   const parseSetData = (repsString, weightString) => {
     if (!repsString) return [{ reps: "", weight: "" }];
     const r = String(repsString).split("-");
@@ -87,7 +85,7 @@ export default function LivePage({ params }) {
   };
 
   const openEdit = (exName, dayName, existingData) => {
-    const key = `${exName}_${dayName}`;
+    const key = `${exName.trim()}_${dayName.trim()}`;
     setEditingKey(key);
     setNoteInput(existingData?.notes || "");
     if (existingData) {
@@ -114,7 +112,7 @@ export default function LivePage({ params }) {
     for (let i = 0; i < setLogsData.length; i++) {
       if (!setLogsData[i].reps) return alert(`Inserisci le reps per il set ${i + 1}`);
     }
-    const key = `${exName}_${dayName}`;
+    const key = `${exName.trim()}_${dayName.trim()}`;
     const repsString = setLogsData.map((r) => r.reps).join("-");
     const weightString = setLogsData.map((r) => r.weight).join("-");
 
@@ -129,7 +127,17 @@ export default function LivePage({ params }) {
     if (!error) {
       setLogs((prev) => ({ ...prev, [key]: { actual_reps: repsString, actual_weight: weightString, notes: noteInput, actual_sets: String(setLogsData.length), completed: true, exercise_name: exName, day_label: dayName }, }));
       closeEdit();
-    } else { alert("Errore salvataggio: " + error.message); }
+    } else { alert("Errore: " + error.message); }
+  };
+
+  // Helper per formattare lo storico
+  const renderHistorySummary = (hist) => {
+      if(!hist) return null;
+      const r = String(hist.actual_reps).split('-')[0]; // Prende solo il primo set per brevità o fai una media
+      const w = String(hist.actual_weight).split('-')[0];
+      // Se vuoi mostrare tutto:
+      // return `${String(hist.actual_weight).replace(/-/g, '/')}kg x ${String(hist.actual_reps).replace(/-/g, '/')}`;
+      return `${w}kg x ${r} reps`;
   };
 
   if (loading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-500">Caricamento...</div>;
@@ -181,16 +189,15 @@ export default function LivePage({ params }) {
             <div className="text-center py-10 text-slate-500">Nessun esercizio.</div>
         ) : (
             activeDay.exercises.map((ex, index) => {
-                const key = `${ex.name}_${activeDay.name}`;
+                const key = `${ex.name.trim()}_${activeDay.name.trim()}`;
                 const logData = logs[key];
-                const historyData = historyLogs[key]; // DATI SETTIMANA PRECEDENTE
+                const historyData = historyLogs[key];
                 const isDone = !!logData;
                 const isEditing = editingKey === key;
 
                 return (
                     <div key={index} className={`rounded-2xl border transition-all overflow-hidden relative ${isDone ? "bg-slate-900/50 border-green-900 shadow-sm" : "bg-slate-800 border-slate-700"}`}>
                         
-                        {/* EDITING MODE */}
                         {isEditing ? (
                             <div className="p-4 bg-slate-800 animate-in fade-in zoom-in-95 duration-200">
                                 <div className="flex justify-between items-center mb-4">
@@ -198,12 +205,12 @@ export default function LivePage({ params }) {
                                     <button onClick={closeEdit} className="p-2 bg-slate-700 rounded-full text-slate-400 hover:text-white"><X size={20}/></button>
                                 </div>
                                 
-                                {/* STORICO VISIBILE IN EDITING */}
+                                {/* STORICO NEL POPUP */}
                                 {historyData && (
-                                    <div className="mb-4 bg-slate-700/50 p-3 rounded-xl border border-slate-600/50">
-                                        <div className="text-[10px] uppercase font-bold text-slate-400 mb-1 flex items-center gap-1"><History size={10}/> Settimana {activeWeek - 1}</div>
-                                        <div className="text-sm text-slate-200 font-mono">
-                                            {String(historyData.actual_weight).split('-').join(' / ')} kg x {String(historyData.actual_reps).split('-').join(' / ')} reps
+                                    <div className="mb-4 bg-slate-700/50 p-3 rounded-xl border border-slate-600/50 flex justify-between items-center">
+                                        <div className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1"><History size={12}/> LAST SESSION (W{activeWeek-1})</div>
+                                        <div className="text-sm font-bold text-white bg-slate-600 px-2 py-1 rounded">
+                                            {renderHistorySummary(historyData)}
                                         </div>
                                     </div>
                                 )}
@@ -225,14 +232,21 @@ export default function LivePage({ params }) {
                                 <button onClick={() => saveLog(ex.name, activeDay.name)} className="w-full bg-green-600 text-white font-bold py-3 rounded-xl flex justify-center items-center gap-2"><Check size={20}/> SALVA</button>
                             </div>
                         ) : (
-                            // VIEW MODE
                             <div className="flex flex-col">
                                 <div className="p-5 border-b border-slate-700/50 bg-slate-800/40">
-                                    <h3 className={`text-xl font-bold capitalize mb-1 ${isDone ? "text-green-500" : "text-white"}`}>{ex.name}</h3>
+                                    <div className="flex justify-between items-start">
+                                        <h3 className={`text-xl font-bold capitalize mb-1 ${isDone ? "text-green-500" : "text-white"}`}>{ex.name}</h3>
+                                        
+                                        {/* STORICO VISIBILE SUBITO NELLA CARD */}
+                                        {historyData && !isDone && (
+                                            <div className="bg-slate-900 px-2 py-1 rounded border border-slate-600 text-[10px] text-slate-400 font-mono flex items-center gap-1">
+                                                <History size={10}/> Last: {renderHistorySummary(historyData)}
+                                            </div>
+                                        )}
+                                    </div>
                                     {ex.notes && <div className="text-xs text-slate-400 flex items-center gap-1 mt-1 bg-slate-700/50 p-1.5 rounded-lg inline-block"><Info size={12}/> {ex.notes}</div>}
                                 </div>
 
-                                {/* TARGET GRID */}
                                 <div className="grid grid-cols-4 divide-x divide-slate-700/50 bg-slate-800/20 border-b border-slate-700/50">
                                     <div className="p-3 text-center"><span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Serie</span><div className="text-white font-bold text-sm">{ex.sets} x {ex.reps}</div></div>
                                     <div className="p-3 text-center"><span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Carico</span><div className="text-yellow-400 font-bold text-sm">{ex.load || "-"}</div></div>
@@ -240,31 +254,26 @@ export default function LivePage({ params }) {
                                     <div className="p-3 text-center"><span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Stato</span><div className={isDone ? "text-green-500 font-bold text-sm" : "text-slate-500 text-sm"}>{isDone ? "Fatto" : "Da fare"}</div></div>
                                 </div>
 
-                                {/* VISUALIZZAZIONE DATI SALVATI (GRID MIGLIORATA) */}
-                                {isDone && logData && (
-                                    <div className="bg-slate-900/40 p-4">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="text-[10px] font-bold text-green-500 uppercase">Allenamento Completato</span>
-                                            {historyData && <span className="text-[9px] text-slate-500 flex items-center gap-1">VS W{activeWeek-1}: {historyData.actual_weight.split('-')[0]}kg</span>}
-                                        </div>
-                                        <div className="space-y-1">
-                                            {String(logData.actual_reps).split('-').map((rep, i) => {
-                                                const weight = String(logData.actual_weight).split('-')[i] || '-';
+                                {isDone && (
+                                    <div className="bg-slate-900/30 p-4">
+                                        <div className="space-y-1 mb-3">
+                                            {String(logData.actual_reps).split('-').map((r, i) => {
+                                                const w = String(logData.actual_weight).split('-')[i] || '-';
                                                 return (
-                                                    <div key={i} className="flex items-center justify-between text-sm bg-slate-800/50 p-2 rounded-lg border border-slate-700/50">
-                                                        <span className="text-slate-500 font-bold text-xs w-8">#{i+1}</span>
-                                                        <span className="font-bold text-white">{rep} <span className="text-xs text-slate-500 font-normal">reps</span></span>
-                                                        <span className="font-bold text-yellow-500">{weight} <span className="text-xs text-yellow-700 font-normal">kg</span></span>
+                                                    <div key={i} className="grid grid-cols-[40px_1fr_1fr] text-sm font-mono items-center text-center">
+                                                        <span className="text-green-500/70 font-bold text-left">#{i+1}</span>
+                                                        <span className="font-bold text-white">{r} reps</span>
+                                                        <span className="text-green-400 font-bold">{w} kg</span>
                                                     </div>
                                                 );
                                             })}
                                         </div>
-                                        {logData.notes && <div className="mt-3 text-xs italic text-slate-400 bg-slate-800 p-2 rounded border border-slate-700">"{logData.notes}"</div>}
+                                        {logData.notes && <div className="text-xs text-green-200/50 italic border-t border-green-900/20 pt-2">"{logData.notes}"</div>}
                                     </div>
                                 )}
 
                                 <div className="p-3">
-                                    <button onClick={() => openEdit(ex.name, activeDay.name, logData)} className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all gap-2 border ${isDone ? "bg-transparent border-slate-600 text-slate-300 hover:bg-slate-800" : "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-900/20"}`}>
+                                    <button onClick={() => openEdit(ex.name, activeDay.name, logData)} className={`w-full py-3 rounded-xl flex items-center justify-center font-bold text-sm transition-all gap-2 border ${isDone ? "bg-transparent border-slate-600 text-slate-300" : "bg-blue-600 border-blue-600 text-white"}`}>
                                         {isDone ? <><Edit2 size={16}/> MODIFICA</> : <><Activity size={16}/> INSERISCI DATI</>}
                                     </button>
                                 </div>
