@@ -276,7 +276,7 @@ export default function LivePage({ params }) {
                                     <div className="p-3 text-center"><span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Serie</span><div className="text-white font-bold text-sm">{ex.sets} x {ex.reps}</div></div>
                                     <div className="p-3 text-center"><span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Carico</span><div className="text-yellow-400 font-bold text-sm">{ex.load || "-"}</div></div>
                                     <div className="p-3 text-center"><span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Recupero</span><div className="text-blue-400 font-bold text-sm">{ex.rest || "-"}</div></div>
-                                    //<div className="p-3 text-center"><span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Stato</span><div className={isDone ? "text-green-500 font-bold text-sm" : "text-slate-500 text-sm"}>{isDone ? "Fatto" : "Da fare"}</div></div>
+                                    <div className="p-3 text-center"><span className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Stato</span><div className={isDone ? "text-green-500 font-bold text-sm" : "text-slate-500 text-sm"}>{isDone ? "Fatto" : "Da fare"}</div></div>
                                 </div>
 
                                 {isDone && (
