@@ -447,8 +447,7 @@ export default function EditorPage() {
             <Plus size={18} /> Aggiungi esercizio
           </button>
           <p className="text-xs text-slate-400 mt-2 text-center">
-            Il bottone resta sempre alla fine della lista (niente + volante).
-          </p>
+            </p>
         </div>
       </div>
     </div>

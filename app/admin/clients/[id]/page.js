@@ -37,6 +37,7 @@ export default function ClientPage({ params }) {
   // form anagrafica
   const [profile, setProfile] = useState({
     full_name: "",
+    gender: "F",
     email: "",
     phone: "",
     birth_date: "",
@@ -80,6 +81,7 @@ export default function ClientPage({ params }) {
 
     setProfile({
       full_name: clientData?.full_name || "",
+      gender: clientData?.gender || "F",
       email: clientData?.email || "",
       phone: clientData?.phone || "",
       birth_date: clientData?.birth_date || "",
@@ -140,6 +142,7 @@ export default function ClientPage({ params }) {
 
     const payload = {
       full_name: fullName,
+      gender: profile.gender || null,
       email: (profile.email || "").trim() || null,
       phone: (profile.phone || "").trim() || null,
       birth_date: profile.birth_date || null,
@@ -350,6 +353,25 @@ export default function ClientPage({ params }) {
                   placeholder="Es. Mario Rossi"
                 />
               </div>
+<div>
+  <label className="text-xs font-bold text-slate-600">Sesso</label>
+  <select
+    value={profile.gender}
+    onChange={(e) => onProfileChange("gender", e.target.value)}
+    className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500 bg-white"
+  >
+    <option value="F">Femmina</option>
+    <option value="M">Maschio</option>
+  </select>
+</div>
+
+<div className="border border-slate-200 rounded-xl bg-slate-50 flex items-center justify-center p-3">
+  <img
+    src={profile.gender === "M" ? "/body-male.png" : "/body-female.png"}
+    alt="Sagoma"
+    className="h-24 object-contain opacity-90"
+  />
+</div>
 
               <div>
                 <label className="text-xs font-bold text-slate-600">Email</label>
