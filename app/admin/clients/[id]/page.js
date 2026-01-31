@@ -5,7 +5,7 @@ import { useState, useEffect, use } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
-  ArrowLeft, Plus, Dumbbell, Trash2, ExternalLink, Activity, Clock, Share2, Save, Scale, User, ClipboardList, Ruler, Calendar, History, X
+  ArrowLeft, Plus, Dumbbell, Trash2, ExternalLink, Activity, Clock, Share2, Save, Scale, User, ClipboardList, Ruler, Calendar, History, X, AlignLeft
 } from "lucide-react";
 
 // --- COMPONENTI UI ---
@@ -33,6 +33,7 @@ const SectionTitle = ({ icon: Icon, title }) => (
   </h3>
 );
 
+// INPUT SENZA FRECCE (CSS Tailwind custom)
 const MeasureInput = ({ label, value, onChange, placeholder }) => (
   <div className="flex flex-col gap-1">
     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</label>
@@ -43,7 +44,8 @@ const MeasureInput = ({ label, value, onChange, placeholder }) => (
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all placeholder:font-normal placeholder:text-slate-300"
+        // La classe [appearance:textfield]... nasconde le frecce su Chrome/Safari/Firefox
+        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all placeholder:font-normal placeholder:text-slate-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
       />
       <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-medium group-focus-within:text-blue-500">cm</span>
     </div>
@@ -83,10 +85,11 @@ export default function ClientPage({ params }) {
   const [bodyForm, setBodyForm] = useState({ neck: "", chest: "", waist: "", hips: "", thigh: "", arm: "", calf: "" });
   const [savingBody, setSavingBody] = useState(false);
   
-  // Modale
+  // Modale Nuova Scheda
   const [showCreateProgram, setShowCreateProgram] = useState(false);
   const [cpTitle, setCpTitle] = useState("");
   const [cpDuration, setCpDuration] = useState(4);
+  const [cpNotes, setCpNotes] = useState(""); // NUOVO CAMPO NOTE
   const [creatingProgram, setCreatingProgram] = useState(false);
 
   useEffect(() => { fetchData(); }, [id]);
@@ -153,9 +156,13 @@ export default function ClientPage({ params }) {
     const { data: { user } } = await supabase.auth.getUser();
     const coachName = user?.user_metadata?.name || "COACH";
     
-    // FIX: Rimosso status: 'active' che non esiste nel DB
+    // Inseriamo anche le NOTE (cpNotes)
     const { data, error } = await supabase.from("programs").insert([{ 
-        client_id: id, title: cpTitle, coach_name: coachName, duration: Number(cpDuration)
+        client_id: id, 
+        title: cpTitle, 
+        coach_name: coachName, 
+        duration: Number(cpDuration),
+        notes: cpNotes || null 
     }]).select().single();
 
     if (data) {
@@ -208,16 +215,16 @@ export default function ClientPage({ params }) {
                             <div><label className="text-xs font-bold text-slate-500 uppercase">Nome Completo</label><input value={profile.full_name} onChange={e => setProfile({...profile, full_name: e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold text-slate-800 outline-none focus:border-blue-500"/></div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div><label className="text-xs font-bold text-slate-500 uppercase">Sesso</label><select value={profile.gender} onChange={e => setProfile({...profile, gender: e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 p-3 rounded-xl font-medium text-slate-700 bg-white"><option value="F">Femmina</option><option value="M">Maschio</option></select></div>
-                                <div><label className="text-xs font-bold text-slate-500 uppercase">Altezza (cm)</label><input type="number" value={profile.height_cm} onChange={e => setProfile({...profile, height_cm: e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 p-3 rounded-xl font-medium text-slate-700"/></div>
+                                <div><label className="text-xs font-bold text-slate-500 uppercase">Altezza (cm)</label><input type="number" value={profile.height_cm} onChange={e => setProfile({...profile, height_cm: e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 p-3 rounded-xl font-medium text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/></div>
                             </div>
-                            <div><label className="text-xs font-bold text-slate-500 uppercase">Email</label><input value={profile.email} onChange={e => setProfile({...profile, email: e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 p-3 rounded-xl font-medium text-slate-700"/></div>
-                            <div><label className="text-xs font-bold text-slate-500 uppercase">Obiettivo</label><textarea rows={3} value={profile.goal} onChange={e => setProfile({...profile, goal: e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 p-3 rounded-xl font-medium text-slate-700 resize-none"/></div>
+                            <div><label className="text-xs font-bold text-slate-500 uppercase">Email</label><input value={profile.email} onChange={e => setProfile({...profile, email: e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 p-3 rounded-xl font-medium text-slate-700 outline-none focus:border-blue-500"/></div>
+                            <div><label className="text-xs font-bold text-slate-500 uppercase">Obiettivo</label><textarea rows={3} value={profile.goal} onChange={e => setProfile({...profile, goal: e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 p-3 rounded-xl font-medium text-slate-700 outline-none focus:border-blue-500 resize-none"/></div>
                             <button onClick={saveProfile} disabled={savingProfile} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-black transition mt-2 disabled:opacity-50 flex justify-center items-center gap-2"><Save size={18}/> {savingProfile ? "Salvataggio..." : "Salva Modifiche"}</button>
                         </div>
                     </div>
                     <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
                         <SectionTitle icon={Scale} title="Peso Corporeo" />
-                        <div className="flex gap-2 mb-4"><input type="number" placeholder="kg" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-lg outline-none focus:bg-white focus:border-blue-500 transition" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} /><button onClick={addWeight} disabled={savingWeight} className="bg-blue-600 text-white px-5 rounded-xl font-bold hover:bg-blue-700 transition disabled:opacity-50"><Plus/></button></div>
+                        <div className="flex gap-2 mb-4"><input type="number" placeholder="kg" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-lg outline-none focus:bg-white focus:border-blue-500 transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} /><button onClick={addWeight} disabled={savingWeight} className="bg-blue-600 text-white px-5 rounded-xl font-bold hover:bg-blue-700 transition disabled:opacity-50"><Plus/></button></div>
                         <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">{metrics.map(m => (<div key={m.id} className="flex justify-between items-center p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="font-bold text-slate-700">{m.weight_kg} kg</span><span className="text-xs font-medium text-slate-400 flex items-center gap-1"><Calendar size={12}/> {new Date(m.measured_at).toLocaleDateString()}</span></div>))}{metrics.length === 0 && <p className="text-center text-slate-400 text-sm py-2">Nessun peso registrato.</p>}</div>
                     </div>
                 </div>
@@ -237,7 +244,7 @@ export default function ClientPage({ params }) {
                     <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
                         <SectionTitle icon={History} title="Storico Circonferenze" />
                         <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left"><thead className="text-[10px] text-slate-400 uppercase font-bold border-b border-slate-100 bg-slate-50/50"><tr><th className="py-3 pl-3 rounded-tl-xl">Data</th><th className="py-3">Petto</th><th className="py-3">Vita</th><th className="py-3">Fianchi</th><th className="py-3">Braccio</th><th className="py-3 rounded-tr-xl">Coscia</th></tr></thead><tbody className="divide-y divide-slate-50">{bodyMeasuresHistory.length === 0 ? (<tr><td colSpan="6" className="py-6 text-center text-slate-400 italic">Nessuna misurazione salvata.</td></tr>) : (bodyMeasuresHistory.map(bm => (<tr key={bm.id} className="hover:bg-slate-50 transition"><td className="py-3 pl-3 font-bold text-slate-700">{new Date(bm.measured_at).toLocaleDateString()}</td><td className="py-3 text-slate-600 font-mono">{bm.chest_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.waist_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.hips_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.arm_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.thigh_cm || "-"}</td></tr>)))}</tbody></table>
+                            <table className="w-full text-sm text-left"><thead className="text-[10px] text-slate-400 uppercase font-bold border-b border-slate-100 bg-slate-50/50"><tr><th className="py-3 pl-3 rounded-tl-xl">Data</th><th className="py-3">Collo</th><th className="py-3">Petto</th><th className="py-3">Vita</th><th className="py-3">Fianchi</th><th className="py-3">Braccio</th><th className="py-3 rounded-tr-xl">Coscia</th></tr></thead><tbody className="divide-y divide-slate-50">{bodyMeasuresHistory.length === 0 ? (<tr><td colSpan="7" className="py-6 text-center text-slate-400 italic">Nessuna misurazione salvata.</td></tr>) : (bodyMeasuresHistory.map(bm => (<tr key={bm.id} className="hover:bg-slate-50 transition"><td className="py-3 pl-3 font-bold text-slate-700">{new Date(bm.measured_at).toLocaleDateString()}</td><td className="py-3 text-slate-600 font-mono">{bm.neck_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.chest_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.waist_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.hips_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.arm_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.thigh_cm || "-"}</td></tr>)))}</tbody></table>
                         </div>
                     </div>
                 </div>
@@ -273,7 +280,10 @@ export default function ClientPage({ params }) {
                <div className="flex justify-between items-center mb-6"><div><h2 className="text-xl font-black text-slate-900">Nuova Scheda</h2><p className="text-xs text-slate-500 font-medium">Assegna un nuovo programma</p></div><button onClick={() => setShowCreateProgram(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 text-slate-500 transition"><X size={20}/></button></div>
                <div className="space-y-5">
                    <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Nome Programma</label><input autoFocus value={cpTitle} onChange={e => setCpTitle(e.target.value)} placeholder="Es. Ipertrofia Base" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold text-lg outline-none focus:border-blue-500 focus:bg-white transition placeholder:font-normal"/></div>
-                   <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Durata (Settimane)</label><input type="number" value={cpDuration} onChange={e => setCpDuration(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold text-lg outline-none focus:border-blue-500 focus:bg-white transition"/></div>
+                   <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Durata (Settimane)</label><input type="number" value={cpDuration} onChange={e => setCpDuration(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold text-lg outline-none focus:border-blue-500 focus:bg-white transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/></div>
+                   {/* CAMPO NOTE AGGIUNTO */}
+                   <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Note Generali Scheda</label><textarea value={cpNotes} onChange={e => setCpNotes(e.target.value)} placeholder="Es. Focus sull'intensità..." className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-medium text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition resize-none h-20"/></div>
+                   
                    <div className="pt-2"><button onClick={createProgram} disabled={creatingProgram} className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-black transition shadow-lg shadow-slate-300 disabled:opacity-50 flex justify-center gap-2">{creatingProgram ? "Creazione..." : <><Plus size={20}/> Crea Scheda</>}</button></div>
                </div>
            </div>
