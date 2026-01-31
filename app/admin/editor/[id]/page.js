@@ -33,6 +33,7 @@ export default function EditorPage({ params }) {
     const { data, error } = await supabase.from("programs").select("*").eq("id", id).single();
     
     if (error || !data) {
+      // Se c'è un errore, non crashare, torna alla dashboard
       alert("Errore o scheda non trovata.");
       router.push("/admin/dashboard");
       return;
@@ -40,17 +41,17 @@ export default function EditorPage({ params }) {
 
     setProgram(data);
 
-    // LOGICA ROBUSTA PER I DATI
+    // LOGICA ROBUSTA: Se days_structure esiste nel DB usalo, altrimenti crea default
     if (data.days_structure && Array.isArray(data.days_structure) && data.days_structure.length > 0) {
-      // Sanifichiamo i dati vecchi per evitare crash (aggiungiamo campi mancanti se necessario)
+      // Sanifica i dati esistenti (se mancano campi come notes, li aggiunge)
       const sanitizedDays = data.days_structure.map(d => ({
         ...d,
-        exercises: Array.isArray(d.exercises) ? d.exercises : [], // Assicura che exercises sia array
-        notes: d.notes || '' // Assicura che notes esista
+        exercises: Array.isArray(d.exercises) ? d.exercises : [],
+        notes: d.notes || '' 
       }));
       setDays(sanitizedDays);
     } else {
-      // Scheda nuova o vuota: inizializza default
+      // Nuova scheda: crea Giorno A vuoto
       setDays([{ id: 'day-1', name: 'Giorno A', notes: '', exercises: [] }]);
     }
     setLoading(false);
@@ -127,6 +128,7 @@ export default function EditorPage({ params }) {
 
   const saveProgram = async () => {
     setSaving(true);
+    // Ora che hai aggiunto la colonna days_structure nel DB, questo funzionerà
     const { error } = await supabase
       .from("programs")
       .update({ 
@@ -143,7 +145,7 @@ export default function EditorPage({ params }) {
   // --- RENDER SAFEGUARDS ---
   if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-400">Caricamento editor...</div>;
   
-  // Se per qualche motivo days è vuoto o activeDay non esiste, mostriamo un fallback invece di crashare
+  // Protezione contro crash se l'array days è vuoto
   const activeDay = days[activeDayIndex];
   if (!activeDay) return <div className="p-10 text-center">Inizializzazione dati...</div>;
 
