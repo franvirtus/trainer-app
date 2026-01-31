@@ -5,7 +5,7 @@ import { useState, useEffect, use } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
-  ArrowLeft, Plus, Dumbbell, Trash2, ExternalLink, Activity, Clock, Share2, Save, Scale, User, ClipboardList, Ruler, Calendar, History, X, AlignLeft
+  ArrowLeft, Plus, Dumbbell, Trash2, ExternalLink, Activity, Clock, Share2, Save, Scale, User, ClipboardList, Ruler, Calendar, History, X, FileText
 } from "lucide-react";
 
 // --- COMPONENTI UI ---
@@ -44,7 +44,6 @@ const MeasureInput = ({ label, value, onChange, placeholder }) => (
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        // La classe [appearance:textfield]... nasconde le frecce su Chrome/Safari/Firefox
         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all placeholder:font-normal placeholder:text-slate-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
       />
       <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-medium group-focus-within:text-blue-500">cm</span>
@@ -89,7 +88,7 @@ export default function ClientPage({ params }) {
   const [showCreateProgram, setShowCreateProgram] = useState(false);
   const [cpTitle, setCpTitle] = useState("");
   const [cpDuration, setCpDuration] = useState(4);
-  const [cpNotes, setCpNotes] = useState(""); // NUOVO CAMPO NOTE
+  const [cpNotes, setCpNotes] = useState(""); 
   const [creatingProgram, setCreatingProgram] = useState(false);
 
   useEffect(() => { fetchData(); }, [id]);
@@ -156,7 +155,6 @@ export default function ClientPage({ params }) {
     const { data: { user } } = await supabase.auth.getUser();
     const coachName = user?.user_metadata?.name || "COACH";
     
-    // Inseriamo anche le NOTE (cpNotes)
     const { data, error } = await supabase.from("programs").insert([{ 
         client_id: id, 
         title: cpTitle, 
@@ -244,7 +242,39 @@ export default function ClientPage({ params }) {
                     <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
                         <SectionTitle icon={History} title="Storico Circonferenze" />
                         <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left"><thead className="text-[10px] text-slate-400 uppercase font-bold border-b border-slate-100 bg-slate-50/50"><tr><th className="py-3 pl-3 rounded-tl-xl">Data</th><th className="py-3">Collo</th><th className="py-3">Petto</th><th className="py-3">Vita</th><th className="py-3">Fianchi</th><th className="py-3">Braccio</th><th className="py-3 rounded-tr-xl">Coscia</th></tr></thead><tbody className="divide-y divide-slate-50">{bodyMeasuresHistory.length === 0 ? (<tr><td colSpan="7" className="py-6 text-center text-slate-400 italic">Nessuna misurazione salvata.</td></tr>) : (bodyMeasuresHistory.map(bm => (<tr key={bm.id} className="hover:bg-slate-50 transition"><td className="py-3 pl-3 font-bold text-slate-700">{new Date(bm.measured_at).toLocaleDateString()}</td><td className="py-3 text-slate-600 font-mono">{bm.neck_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.chest_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.waist_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.hips_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.arm_cm || "-"}</td><td className="py-3 text-slate-600 font-mono">{bm.thigh_cm || "-"}</td></tr>)))}</tbody></table>
+                            {/* TABELLA STORICO CORRETTA E RIORDINATA */}
+                            <table className="w-full text-sm text-left">
+                                <thead className="text-[10px] text-slate-400 uppercase font-bold border-b border-slate-100 bg-slate-50/50">
+                                    <tr>
+                                        <th className="py-3 pl-3 rounded-tl-xl">Data</th>
+                                        <th className="py-3">Collo</th>
+                                        <th className="py-3">Petto</th>
+                                        <th className="py-3">Braccio</th>
+                                        <th className="py-3">Vita</th>
+                                        <th className="py-3">Fianchi</th>
+                                        <th className="py-3">Coscia</th>
+                                        <th className="py-3 rounded-tr-xl">Polpaccio</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                    {bodyMeasuresHistory.length === 0 ? (
+                                        <tr><td colSpan="8" className="py-6 text-center text-slate-400 italic">Nessuna misurazione salvata.</td></tr>
+                                    ) : (
+                                        bodyMeasuresHistory.map(bm => (
+                                            <tr key={bm.id} className="hover:bg-slate-50 transition">
+                                                <td className="py-3 pl-3 font-bold text-slate-700">{new Date(bm.measured_at).toLocaleDateString()}</td>
+                                                <td className="py-3 text-slate-600 font-mono">{bm.neck_cm || "-"}</td>
+                                                <td className="py-3 text-slate-600 font-mono">{bm.chest_cm || "-"}</td>
+                                                <td className="py-3 text-slate-600 font-mono">{bm.arm_cm || "-"}</td>
+                                                <td className="py-3 text-slate-600 font-mono">{bm.waist_cm || "-"}</td>
+                                                <td className="py-3 text-slate-600 font-mono">{bm.hips_cm || "-"}</td>
+                                                <td className="py-3 text-slate-600 font-mono">{bm.thigh_cm || "-"}</td>
+                                                <td className="py-3 text-slate-600 font-mono">{bm.calf_cm || "-"}</td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -252,7 +282,25 @@ export default function ClientPage({ params }) {
         )}
         {activeTab === "programs" && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                {programs.length === 0 ? (<div className="bg-white p-12 rounded-3xl border-2 border-dashed border-slate-200 text-center flex flex-col items-center"><div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 mb-4"><Dumbbell size={32}/></div><h3 className="font-bold text-slate-800 text-lg">Nessuna scheda attiva</h3><p className="text-slate-500 text-sm mb-6">Inizia creando il primo programma di allenamento.</p><button onClick={() => setShowCreateProgram(true)} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition">Crea Scheda Ora</button></div>) : (<div className="grid gap-4">{programs.map(p => (<div key={p.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-300 transition-all group flex flex-col md:flex-row justify-between items-start md:items-center gap-4"><div><div className="flex items-center gap-2 mb-1"><h3 className="font-bold text-xl text-slate-900">{p.title}</h3><span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold uppercase rounded-md tracking-wider">Attiva</span></div><div className="flex items-center gap-4 text-xs text-slate-500 font-medium"><span className="flex items-center gap-1"><Clock size={14}/> {p.duration} Settimane</span><span className="flex items-center gap-1"><Calendar size={14}/> {new Date(p.created_at).toLocaleDateString()}</span></div></div><div className="flex items-center gap-2 w-full md:w-auto"><button onClick={() => router.push(`/admin/editor/${p.id}`)} className="flex-1 md:flex-none py-2.5 px-4 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200 transition">MODIFICA</button><button onClick={() => window.open(`/live/${p.id}`,'_blank')} className="flex-1 md:flex-none py-2.5 px-4 bg-green-50 text-green-600 font-bold rounded-xl text-xs hover:bg-green-100 transition flex items-center justify-center gap-2"><ExternalLink size={16}/> LIVE</button><button onClick={() => copyLink(p.id)} className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition" title="Condividi Link"><Share2 size={20}/></button><button onClick={() => deleteProgram(p.id)} className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition" title="Elimina Scheda"><Trash2 size={20}/></button></div></div>))}</div>)}
+                {programs.length === 0 ? (<div className="bg-white p-12 rounded-3xl border-2 border-dashed border-slate-200 text-center flex flex-col items-center"><div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 mb-4"><Dumbbell size={32}/></div><h3 className="font-bold text-slate-800 text-lg">Nessuna scheda attiva</h3><p className="text-slate-500 text-sm mb-6">Inizia creando il primo programma di allenamento.</p><button onClick={() => setShowCreateProgram(true)} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition">Crea Scheda Ora</button></div>) : (<div className="grid gap-4">{programs.map(p => (<div key={p.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-300 transition-all group flex flex-col md:flex-row justify-between items-start gap-4">
+                    <div className="w-full">
+                        <div className="flex items-center gap-2 mb-1"><h3 className="font-bold text-xl text-slate-900">{p.title}</h3><span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold uppercase rounded-md tracking-wider">Attiva</span></div>
+                        <div className="flex items-center gap-4 text-xs text-slate-500 font-medium mb-3"><span className="flex items-center gap-1"><Clock size={14}/> {p.duration} Settimane</span><span className="flex items-center gap-1"><Calendar size={14}/> {new Date(p.created_at).toLocaleDateString()}</span></div>
+                        {/* VISUALIZZAZIONE NOTE SCHEDA */}
+                        {p.notes && (
+                            <div className="mb-4 bg-slate-50 p-3 rounded-xl border border-slate-100 flex gap-2 items-start">
+                                <FileText size={16} className="text-slate-400 mt-0.5 shrink-0"/>
+                                <p className="text-sm text-slate-600 italic">"{p.notes}"</p>
+                            </div>
+                        )}
+                        <div className="flex items-center gap-2 w-full md:w-auto mt-auto">
+                            <button onClick={() => router.push(`/admin/editor/${p.id}`)} className="flex-1 md:flex-none py-2.5 px-4 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200 transition">MODIFICA</button>
+                            <button onClick={() => window.open(`/live/${p.id}`,'_blank')} className="flex-1 md:flex-none py-2.5 px-4 bg-green-50 text-green-600 font-bold rounded-xl text-xs hover:bg-green-100 transition flex items-center justify-center gap-2"><ExternalLink size={16}/> LIVE</button>
+                            <button onClick={() => copyLink(p.id)} className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition" title="Condividi Link"><Share2 size={20}/></button>
+                            <button onClick={() => deleteProgram(p.id)} className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition" title="Elimina Scheda"><Trash2 size={20}/></button>
+                        </div>
+                    </div>
+                </div>))}</div>)}
             </div>
         )}
         {activeTab === "activity" && (
