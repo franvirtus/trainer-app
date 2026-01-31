@@ -17,7 +17,28 @@ import {
   Scale,
   PencilLine,
   X,
+  User,
+  LayoutDashboard,
+  ClipboardList,
+  Ruler,
 } from "lucide-react";
+
+const TabBtn = ({ id, activeTab, setActiveTab, icon: Icon, children }) => {
+  const active = activeTab === id;
+  return (
+    <button
+      onClick={() => setActiveTab(id)}
+      className={`px-4 py-2 rounded-full font-bold text-sm flex items-center gap-2 transition border ${
+        active
+          ? "bg-slate-900 text-white border-slate-900 shadow"
+          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+      }`}
+    >
+      <Icon size={16} />
+      {children}
+    </button>
+  );
+};
 
 export default function ClientPage({ params }) {
   const { id } = use(params);
@@ -25,7 +46,9 @@ export default function ClientPage({ params }) {
 
   const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
   const supabaseKey =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhbm9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
+
+  // NB: ho lasciato la tua key com'è nel tuo codice: se l’hai diversa, rimetti la tua originale.
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   const [client, setClient] = useState(null);
@@ -33,6 +56,9 @@ export default function ClientPage({ params }) {
   const [recentLogs, setRecentLogs] = useState([]);
   const [metrics, setMetrics] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // TAB UI
+  const [activeTab, setActiveTab] = useState("overview");
 
   // form anagrafica
   const [profile, setProfile] = useState({
@@ -51,7 +77,7 @@ export default function ClientPage({ params }) {
   const [newWeight, setNewWeight] = useState("");
   const [savingWeight, setSavingWeight] = useState(false);
 
-  // MODALE: nuova scheda (al posto di prompt)
+  // MODALE: nuova scheda
   const [showCreateProgram, setShowCreateProgram] = useState(false);
   const [cpTitle, setCpTitle] = useState("");
   const [cpDuration, setCpDuration] = useState(4);
@@ -200,8 +226,7 @@ export default function ClientPage({ params }) {
 
     if (updErr) {
       alert(
-        "Peso salvato nello storico, ma errore aggiornando il profilo: " +
-          updErr.message
+        "Peso salvato nello storico, ma errore aggiornando il profilo: " + updErr.message
       );
       setNewWeight("");
       fetchData();
@@ -294,10 +319,13 @@ export default function ClientPage({ params }) {
   if (loading) return <div className="p-8 text-slate-500">Caricamento profilo...</div>;
 
   const displayName = (client?.full_name || "").trim() || "Senza nome";
+  const latestWeight = metrics?.[0]?.weight_kg ?? null;
+  const latestWeightDate = metrics?.[0]?.measured_at ?? null;
+  const lastLog = recentLogs?.[0] ?? null;
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans p-6">
-      <div className="max-w-5xl mx-auto space-y-8">
+      <div className="max-w-5xl mx-auto space-y-6">
         {/* HEADER CLIENTE */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -327,9 +355,151 @@ export default function ClientPage({ params }) {
           </button>
         </div>
 
-        {/* ANAGRAFICA + PESI */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+        {/* TABS */}
+        <div className="flex flex-wrap gap-2">
+          <TabBtn id="overview" activeTab={activeTab} setActiveTab={setActiveTab} icon={LayoutDashboard}>
+            Panoramica
+          </TabBtn>
+          <TabBtn id="profile" activeTab={activeTab} setActiveTab={setActiveTab} icon={User}>
+            Anagrafica
+          </TabBtn>
+          <TabBtn id="measures" activeTab={activeTab} setActiveTab={setActiveTab} icon={Ruler}>
+            Misure
+          </TabBtn>
+          <TabBtn id="programs" activeTab={activeTab} setActiveTab={setActiveTab} icon={Dumbbell}>
+            Schede
+          </TabBtn>
+          <TabBtn id="activity" activeTab={activeTab} setActiveTab={setActiveTab} icon={Activity}>
+            Attività
+          </TabBtn>
+        </div>
+
+        {/* TAB: PANORAMICA */}
+        {activeTab === "overview" && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Card profilo rapido */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <div className="text-xs font-bold text-slate-400 uppercase mb-2">Profilo</div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm text-slate-600">Sesso</div>
+                  <div className="font-extrabold text-slate-900">
+                    {profile.gender === "M" ? "Maschio" : "Femmina"}
+                  </div>
+                </div>
+                <div className="border border-slate-200 rounded-xl bg-slate-50 flex items-center justify-center px-3 py-2">
+                  <img
+                    src={profile.gender === "M" ? "/body-male.png" : "/body-female.png"}
+                    alt="Sagoma"
+                    className="h-20 object-contain opacity-90"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <div className="text-[11px] font-bold text-slate-400 uppercase">Altezza</div>
+                  <div className="text-lg font-extrabold text-slate-900">
+                    {profile.height_cm ? `${profile.height_cm} cm` : "-"}
+                  </div>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <div className="text-[11px] font-bold text-slate-400 uppercase">Peso attuale</div>
+                  <div className="text-lg font-extrabold text-slate-900">
+                    {profile.current_weight_kg !== "" && profile.current_weight_kg !== null
+                      ? `${profile.current_weight_kg} kg`
+                      : "-"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Card peso ultimo */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <div className="text-xs font-bold text-slate-400 uppercase mb-2">Ultimo peso</div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center">
+                  <Scale size={18} />
+                </div>
+                <div>
+                  <div className="text-2xl font-extrabold text-slate-900">
+                    {latestWeight ? `${latestWeight} kg` : "-"}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {latestWeightDate ? new Date(latestWeightDate).toLocaleString() : "Nessun dato"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 text-sm text-slate-600">
+                Schede create: <span className="font-bold text-slate-900">{programs.length}</span>
+              </div>
+
+              <button
+                onClick={() => setActiveTab("measures")}
+                className="mt-4 w-full h-11 rounded-xl bg-slate-100 border border-slate-200 font-bold text-slate-800 hover:bg-slate-200 transition"
+              >
+                Vai a Misure
+              </button>
+            </div>
+
+            {/* Card ultima attività */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <div className="text-xs font-bold text-slate-400 uppercase mb-2">Ultima attività</div>
+
+              {!lastLog ? (
+                <div className="text-sm text-slate-500 italic">
+                  Nessun progresso registrato dall’atleta.
+                </div>
+              ) : (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="font-extrabold text-slate-900">{lastLog.exercise_name}</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase bg-white border border-slate-200 px-2 py-1 rounded">
+                      {lastLog.day_label} • W{lastLog.week_number}
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-slate-600 font-mono">
+                    <div className="flex justify-between border-b border-slate-200/50 pb-1 mb-1">
+                      <span>Reps:</span>
+                      <span className="font-bold text-slate-900">
+                        {(lastLog.actual_reps || "").split("-").join(", ")}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Carico:</span>
+                      <span className="font-bold text-green-700">
+                        {(lastLog.actual_weight || "").split("-").join(", ")} Kg
+                      </span>
+                    </div>
+                  </div>
+
+                  {lastLog.athlete_notes && (
+                    <div className="mt-3 bg-yellow-50 text-yellow-800 p-2 rounded-lg text-xs italic border border-yellow-100">
+                      "{lastLog.athlete_notes}"
+                    </div>
+                  )}
+
+                  <div className="text-right mt-2 text-[10px] text-slate-400">
+                    {new Date(lastLog.created_at).toLocaleString()}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => setActiveTab("activity")}
+                className="mt-4 w-full h-11 rounded-xl bg-slate-900 text-white font-extrabold hover:bg-black transition"
+              >
+                Apri Attività completa
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: ANAGRAFICA */}
+        {activeTab === "profile" && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                 <PencilLine size={18} /> Anagrafica
@@ -353,25 +523,26 @@ export default function ClientPage({ params }) {
                   placeholder="Es. Mario Rossi"
                 />
               </div>
-<div>
-  <label className="text-xs font-bold text-slate-600">Sesso</label>
-  <select
-    value={profile.gender}
-    onChange={(e) => onProfileChange("gender", e.target.value)}
-    className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500 bg-white"
-  >
-    <option value="F">Femmina</option>
-    <option value="M">Maschio</option>
-  </select>
-</div>
 
-<div className="border border-slate-200 rounded-xl bg-slate-50 flex items-center justify-center p-3">
-  <img
-    src={profile.gender === "M" ? "/body-male.png" : "/body-female.png"}
-    alt="Sagoma"
-    className="h-24 object-contain opacity-90"
-  />
-</div>
+              <div>
+                <label className="text-xs font-bold text-slate-600">Sesso</label>
+                <select
+                  value={profile.gender}
+                  onChange={(e) => onProfileChange("gender", e.target.value)}
+                  className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500 bg-white"
+                >
+                  <option value="F">Femmina</option>
+                  <option value="M">Maschio</option>
+                </select>
+              </div>
+
+              <div className="border border-slate-200 rounded-xl bg-slate-50 flex items-center justify-center p-3">
+                <img
+                  src={profile.gender === "M" ? "/body-male.png" : "/body-female.png"}
+                  alt="Sagoma"
+                  className="h-24 object-contain opacity-90"
+                />
+              </div>
 
               <div>
                 <label className="text-xs font-bold text-slate-600">Email</label>
@@ -436,54 +607,75 @@ export default function ClientPage({ params }) {
               </div>
             </div>
           </div>
+        )}
 
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-3">
-              <Scale size={18} /> Peso (storico)
-            </h2>
+        {/* TAB: MISURE */}
+        {activeTab === "measures" && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Peso storico */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm lg:col-span-1">
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-3">
+                <Scale size={18} /> Peso (storico)
+              </h2>
 
-            <div className="flex gap-2 mb-4">
-              <input
-                inputMode="decimal"
-                value={newWeight}
-                onChange={(e) => setNewWeight(e.target.value)}
-                className="flex-1 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
-                placeholder="Es. 82.5"
-              />
-              <button
-                onClick={addWeight}
-                disabled={savingWeight}
-                className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold hover:bg-black transition disabled:opacity-50"
-              >
-                {savingWeight ? "..." : "Registra"}
-              </button>
+              <div className="flex gap-2 mb-4">
+                <input
+                  inputMode="decimal"
+                  value={newWeight}
+                  onChange={(e) => setNewWeight(e.target.value)}
+                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
+                  placeholder="Es. 82.5"
+                />
+                <button
+                  onClick={addWeight}
+                  disabled={savingWeight}
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold hover:bg-black transition disabled:opacity-50"
+                >
+                  {savingWeight ? "..." : "Registra"}
+                </button>
+              </div>
+
+              {metrics.length === 0 ? (
+                <div className="text-sm text-slate-500 italic">Nessuna misura registrata.</div>
+              ) : (
+                <div className="space-y-2">
+                  {metrics.map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex justify-between items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
+                    >
+                      <div className="text-sm font-bold text-slate-800">{m.weight_kg} kg</div>
+                      <div className="text-xs text-slate-500">
+                        {new Date(m.measured_at).toLocaleDateString()}{" "}
+                        {new Date(m.measured_at).toLocaleTimeString().slice(0, 5)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {metrics.length === 0 ? (
-              <div className="text-sm text-slate-500 italic">Nessuna misura registrata.</div>
-            ) : (
-              <div className="space-y-2">
-                {metrics.map((m) => (
-                  <div
-                    key={m.id}
-                    className="flex justify-between items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
-                  >
-                    <div className="text-sm font-bold text-slate-800">{m.weight_kg} kg</div>
-                    <div className="text-xs text-slate-500">
-                      {new Date(m.measured_at).toLocaleDateString()}{" "}
-                      {new Date(m.measured_at).toLocaleTimeString().slice(0, 5)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+            {/* Placeholder misure corpo (step 2) */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm lg:col-span-2">
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-3">
+                <Ruler size={18} /> Misure corpo
+              </h2>
 
-        {/* SCHEDE + FEED */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* COLONNA SCHEDE */}
-          <div className="lg:col-span-2 space-y-6">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-600 text-sm">
+                Qui aggiungiamo nel prossimo step:
+                <ul className="list-disc ml-6 mt-2 space-y-1">
+                  <li>Form misure (vita, fianchi, torace, braccio, coscia…)</li>
+                  <li>Storico misure in tabella</li>
+                  <li>Integrazione con tabella <b>client_measurements</b></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: SCHEDE */}
+        {activeTab === "programs" && (
+          <div className="space-y-6">
             <h2 className="text-lg font-bold text-slate-700 flex items-center gap-2">
               <Dumbbell size={20} /> Schede Allenamento
             </h2>
@@ -546,16 +738,18 @@ export default function ClientPage({ params }) {
               </div>
             )}
           </div>
+        )}
 
-          {/* COLONNA FEED ATTIVITÀ */}
-          <div className="space-y-6">
+        {/* TAB: ATTIVITÀ */}
+        {activeTab === "activity" && (
+          <div className="space-y-4">
             <h2 className="text-lg font-bold text-slate-700 flex items-center gap-2">
-              <Activity size={20} className="text-green-600" /> Attività Recente
+              <ClipboardList size={20} className="text-green-600" /> Attività Recente
             </h2>
 
-            <div className="bg-slate-100 rounded-2xl p-4 h-[500px] overflow-y-auto border border-slate-200 relative">
+            <div className="bg-white rounded-2xl p-4 border border-slate-200">
               {recentLogs.length === 0 ? (
-                <div className="text-center text-slate-400 mt-10 text-sm">
+                <div className="text-center text-slate-400 py-10 text-sm">
                   Ancora nessun dato registrato dall&apos;atleta.
                 </div>
               ) : (
@@ -567,24 +761,24 @@ export default function ClientPage({ params }) {
                     return (
                       <div
                         key={log.id}
-                        className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm text-sm"
+                        className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-sm"
                       >
                         <div className="flex justify-between items-start mb-2">
                           <span className="font-bold text-slate-800 capitalize">
                             {log.exercise_name}
                           </span>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase bg-slate-100 px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase bg-white px-1.5 py-0.5 rounded border border-slate-200">
                             {log.day_label} • W{log.week_number}
                           </span>
                         </div>
                         <div className="text-slate-600 mb-2 font-mono text-xs">
-                          <div className="flex justify-between border-b border-slate-100 pb-1 mb-1">
+                          <div className="flex justify-between border-b border-slate-200/50 pb-1 mb-1">
                             <span>Reps:</span>{" "}
                             <span className="font-bold text-slate-900">{reps}</span>
                           </div>
                           <div className="flex justify-between">
                             <span>Carico:</span>{" "}
-                            <span className="font-bold text-green-600">{weights} Kg</span>
+                            <span className="font-bold text-green-700">{weights} Kg</span>
                           </div>
                         </div>
                         {log.athlete_notes && (
@@ -593,7 +787,7 @@ export default function ClientPage({ params }) {
                           </div>
                         )}
                         <div className="text-right mt-2">
-                          <span className="text-[10px] text-slate-300">
+                          <span className="text-[10px] text-slate-400">
                             {new Date(log.created_at).toLocaleString()}
                           </span>
                         </div>
@@ -604,7 +798,7 @@ export default function ClientPage({ params }) {
               )}
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* MODALE: CREA NUOVA SCHEDA */}
@@ -664,13 +858,9 @@ export default function ClientPage({ params }) {
                 </div>
 
                 <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 flex flex-col justify-center">
-                  <div className="text-[11px] font-bold text-slate-500 uppercase">
-                    Nota
-                  </div>
+                  <div className="text-[11px] font-bold text-slate-500 uppercase">Nota</div>
                   <div className="text-sm font-bold text-slate-800">4 settimane = standard</div>
-                  <div className="text-xs text-slate-500">
-                    puoi sempre duplicare e modificare
-                  </div>
+                  <div className="text-xs text-slate-500">puoi sempre duplicare e modificare</div>
                 </div>
               </div>
             </div>
