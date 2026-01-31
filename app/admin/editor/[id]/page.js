@@ -40,6 +40,7 @@ export default function EditorPage({ params }) {
 
     setProgram(data);
 
+    // Carica la struttura. Se esiste, L'ORDINE È PRESERVATO (è un array JSON).
     if (data.days_structure && Array.isArray(data.days_structure) && data.days_structure.length > 0) {
       const sanitizedDays = data.days_structure.map(d => ({
         ...d,
@@ -54,78 +55,80 @@ export default function EditorPage({ params }) {
   };
 
   // --- LOGICA OVERRIDE (ESERCIZI & NOTE GIORNO) ---
-  
   const getExerciseDisplayData = (ex) => {
       if (activeWeek === 1) return ex;
       const override = ex.progression?.[activeWeek];
       return override ? { ...ex, ...override } : ex;
   };
 
-  // Funzione per leggere la nota corretta in base alla settimana
   const getDayNotes = (day) => {
-      // Se W1, ritorna la nota base
       if (activeWeek === 1) return day.notes || '';
-      
-      // Se W>1, cerca override. Se non c'è, usa la nota base (ereditarietà)
-      // Supporta sia chiave numerica che stringa per sicurezza
       const p = day.progression || {};
       const wOverride = p[activeWeek] || p[String(activeWeek)];
-      
       return wOverride?.notes ?? day.notes ?? '';
   };
 
-  // Funzione per salvare la nota nella settimana corretta
-  const updateDayNotes = (val) => {
-    const newDays = [...days];
-    const day = newDays[activeDayIndex];
-
-    if (activeWeek === 1) {
-        // Modifica BASE (W1) -> Si propaga a tutte le settimane senza override
-        day.notes = val;
-    } else {
-        // Modifica OVERRIDE (W2+)
-        if (!day.progression) day.progression = {};
-        // Inizializza l'oggetto per la settimana se non esiste
-        if (!day.progression[activeWeek]) day.progression[activeWeek] = {};
-        
-        day.progression[activeWeek].notes = val;
-    }
-    setDays(newDays);
+  // --- AGGIORNAMENTI STATO (RENDERING SICURO) ---
+  
+  // 1. Modifica Nome Giorno (FIX: Usa map per re-render sicuro)
+  const updateDayName = (val) => {
+    setDays(prevDays => prevDays.map((day, i) => 
+        i === activeDayIndex ? { ...day, name: val } : day
+    ));
   };
 
-  const updateExercise = (exIndex, field, value) => {
-    const newDays = [...days];
-    const exercise = newDays[activeDayIndex].exercises[exIndex];
-
-    if (activeWeek === 1) {
-        exercise[field] = value;
-    } else {
-        if (!exercise.progression) exercise.progression = {};
-        if (!exercise.progression[activeWeek]) {
-            exercise.progression[activeWeek] = {
-                sets: exercise.sets,
-                reps: exercise.reps,
-                load: exercise.load,
-                rest: exercise.rest,
-                notes: exercise.notes
-            };
+  // 2. Modifica Note Giorno (Base o Settimanale)
+  const updateDayNotes = (val) => {
+    setDays(prevDays => prevDays.map((day, i) => {
+        if (i !== activeDayIndex) return day;
+        
+        // Copia profonda sicura
+        const updatedDay = { ...day };
+        
+        if (activeWeek === 1) {
+            updatedDay.notes = val;
+        } else {
+            updatedDay.progression = { ...updatedDay.progression };
+            if (!updatedDay.progression[activeWeek]) updatedDay.progression[activeWeek] = {};
+            updatedDay.progression[activeWeek] = { ...updatedDay.progression[activeWeek], notes: val };
         }
-        exercise.progression[activeWeek][field] = value;
-    }
-    setDays(newDays);
+        return updatedDay;
+    }));
+  };
+
+  // 3. Modifica Esercizi (Base o Settimanale)
+  const updateExercise = (exIndex, field, value) => {
+    setDays(prevDays => prevDays.map((day, dIdx) => {
+        if (dIdx !== activeDayIndex) return day;
+
+        const updatedExercises = day.exercises.map((ex, eIdx) => {
+            if (eIdx !== exIndex) return ex;
+
+            const updatedEx = { ...ex };
+            if (activeWeek === 1) {
+                updatedEx[field] = value;
+            } else {
+                updatedEx.progression = { ...updatedEx.progression };
+                if (!updatedEx.progression[activeWeek]) {
+                    updatedEx.progression[activeWeek] = {
+                        sets: updatedEx.sets, reps: updatedEx.reps, load: updatedEx.load, rest: updatedEx.rest, notes: updatedEx.notes
+                    };
+                }
+                updatedEx.progression[activeWeek] = { ...updatedEx.progression[activeWeek], [field]: value };
+            }
+            return updatedEx;
+        });
+
+        return { ...day, exercises: updatedExercises };
+    }));
   };
 
   // --- AZIONI STANDARD ---
   const addDay = () => {
     const newDayLabel = String.fromCharCode(65 + days.length); 
     const newDay = { id: `day-${Date.now()}`, name: `Giorno ${newDayLabel}`, notes: '', exercises: [] };
-    setDays([...days, newDay]);
+    setDays([...days, newDay]); // Aggiunge in coda (preserva ordine creazione)
     setActiveDayIndex(days.length); 
-  };
-
-  const updateDayName = (val) => {
-    const newDays = [...days];
-    if(newDays[activeDayIndex]) { newDays[activeDayIndex].name = val; setDays(newDays); }
   };
 
   const deleteDay = () => {
@@ -138,32 +141,21 @@ export default function EditorPage({ params }) {
 
   const addExercise = () => {
     const newDays = [...days];
-    if(newDays[activeDayIndex]) {
-        newDays[activeDayIndex].exercises.push({
-            id: `ex-${Date.now()}`, name: "", sets: "3", reps: "10", load: "", rest: "90\"", notes: ""
-        });
-        setDays(newDays);
-    }
+    newDays[activeDayIndex].exercises.push({
+        id: `ex-${Date.now()}`, name: "", sets: "3", reps: "10", load: "", rest: "90\"", notes: ""
+    });
+    setDays(newDays);
   };
 
   const deleteExercise = (exIndex) => {
     const newDays = [...days];
-    if(newDays[activeDayIndex]) {
-        newDays[activeDayIndex].exercises.splice(exIndex, 1);
-        setDays(newDays);
-    }
+    newDays[activeDayIndex].exercises.splice(exIndex, 1);
+    setDays(newDays);
   };
 
   const saveProgram = async () => {
     setSaving(true);
-    const { error } = await supabase
-      .from("programs")
-      .update({ 
-        days_structure: days,
-        updated_at: new Date()
-      })
-      .eq("id", id);
-
+    const { error } = await supabase.from("programs").update({ days_structure: days, updated_at: new Date() }).eq("id", id);
     setSaving(false);
     if (error) alert("Errore: " + error.message);
     else alert("Salvato!");
@@ -195,17 +187,7 @@ export default function EditorPage({ params }) {
             {Array.from({ length: program?.duration || 4 }).map((_, i) => {
                 const w = i + 1;
                 return (
-                    <button 
-                        key={w} 
-                        onClick={() => setActiveWeek(w)}
-                        className={`flex-shrink-0 w-10 h-10 rounded-xl font-bold text-sm flex items-center justify-center transition border ${
-                            activeWeek === w 
-                            ? "bg-slate-900 text-white border-slate-900 shadow-md scale-105" 
-                            : "bg-white text-slate-500 border-slate-200 hover:border-slate-400"
-                        }`}
-                    >
-                        W{w}
-                    </button>
+                    <button key={w} onClick={() => setActiveWeek(w)} className={`flex-shrink-0 w-10 h-10 rounded-xl font-bold text-sm flex items-center justify-center transition border ${activeWeek === w ? "bg-slate-900 text-white border-slate-900 shadow-md scale-105" : "bg-white text-slate-500 border-slate-200 hover:border-slate-400"}`}>W{w}</button>
                 );
             })}
         </div>
@@ -213,7 +195,7 @@ export default function EditorPage({ params }) {
 
       <div className="max-w-4xl mx-auto p-6 space-y-6">
         
-        {/* DAY TABS */}
+        {/* DAY TABS - ORDINE CREAZIONE (Itera array days così com'è) */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2">
           {days.map((day, idx) => (
             <button key={day.id} onClick={() => setActiveDayIndex(idx)} className={`px-5 py-2 rounded-xl font-bold text-sm whitespace-nowrap transition border ${idx === activeDayIndex ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"}`}>{day.name}</button>
@@ -221,57 +203,47 @@ export default function EditorPage({ params }) {
           <button onClick={addDay} className="p-2 bg-slate-200 rounded-xl hover:bg-slate-300 text-slate-600 transition"><Plus size={18}/></button>
         </div>
 
-        {/* CARD GIORNO ATTIVO */}
+        {/* CARD GIORNO */}
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            
-            {/* Header Giorno */}
             <div className="bg-slate-50 border-b border-slate-200 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3 flex-1">
                     <div className="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center font-bold text-slate-400">{String.fromCharCode(65 + activeDayIndex)}</div>
-                    <input value={activeDay.name} onChange={(e) => updateDayName(e.target.value)} className="bg-transparent font-black text-xl text-slate-800 outline-none w-full placeholder:text-slate-300" placeholder="Nome Giorno"/>
+                    
+                    {/* INPUT NOME GIORNO (FIXED) */}
+                    <input 
+                        value={activeDay.name || ''} 
+                        onChange={(e) => updateDayName(e.target.value)} 
+                        className="bg-transparent font-black text-xl text-slate-800 outline-none w-full placeholder:text-slate-300" 
+                        placeholder="Nome Giorno"
+                    />
                 </div>
                 <div className="flex items-center gap-2">
                     <button onClick={deleteDay} className="text-slate-400 hover:text-red-500 p-2 transition"><Trash2 size={18}/></button>
                 </div>
             </div>
 
-            {/* Note Giorno (CON GESTIONE SETTIMANE) */}
+            {/* NOTE GIORNO */}
             <div className="px-5 pt-5 relative">
-                {activeWeek > 1 && (
-                    <div className="absolute top-5 right-5 text-[9px] font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded border border-amber-200 z-10">NOTA W{activeWeek}</div>
-                )}
+                {activeWeek > 1 && (<div className="absolute top-5 right-5 text-[9px] font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded border border-amber-200 z-10">NOTA W{activeWeek}</div>)}
                 <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex gap-3">
                     <div className="mt-1 text-amber-400"><Info size={18}/></div>
                     <div className="flex-1">
                         <label className="block text-[10px] font-bold text-amber-700 uppercase mb-1">Note per la giornata</label>
-                        <textarea 
-                            value={getDayNotes(activeDay)} 
-                            onChange={(e) => updateDayNotes(e.target.value)} 
-                            placeholder="Es. Focus tempo sotto tensione..." 
-                            className="w-full bg-transparent outline-none text-sm text-amber-900 placeholder:text-amber-400/70 font-medium resize-none h-auto min-h-[40px]" 
-                            rows={2}
-                        />
+                        <textarea value={getDayNotes(activeDay)} onChange={(e) => updateDayNotes(e.target.value)} placeholder="Es. Focus tempo sotto tensione..." className="w-full bg-transparent outline-none text-sm text-amber-900 placeholder:text-amber-400/70 font-medium resize-none h-auto min-h-[40px]" rows={2}/>
                     </div>
                 </div>
             </div>
 
-            {/* LISTA ESERCIZI */}
+            {/* ESERCIZI */}
             <div className="p-5 space-y-4">
                 {(!activeDay.exercises || activeDay.exercises.length === 0) ? (
-                    <div className="text-center py-10 border-2 border-dashed border-slate-100 rounded-xl text-slate-400">
-                        <Dumbbell size={32} className="mx-auto mb-2 opacity-20"/>
-                        <p className="text-sm font-medium">Nessun esercizio.</p>
-                    </div>
+                    <div className="text-center py-10 border-2 border-dashed border-slate-100 rounded-xl text-slate-400"><Dumbbell size={32} className="mx-auto mb-2 opacity-20"/><p className="text-sm font-medium">Nessun esercizio.</p></div>
                 ) : (
                     activeDay.exercises.map((ex, idx) => {
                         const data = getExerciseDisplayData(ex);
                         return (
                             <div key={ex.id || idx} className={`group relative bg-white border rounded-2xl p-4 shadow-sm hover:border-blue-400 transition-all ${activeWeek > 1 ? "border-blue-100 bg-blue-50/20" : "border-slate-200"}`}>
-                                
-                                {activeWeek > 1 && (
-                                    <div className="absolute top-2 right-2 text-[9px] font-bold text-blue-500 bg-blue-100 px-2 py-0.5 rounded">MODIFICA W{activeWeek}</div>
-                                )}
-
+                                {activeWeek > 1 && (<div className="absolute top-2 right-2 text-[9px] font-bold text-blue-500 bg-blue-100 px-2 py-0.5 rounded">MODIFICA W{activeWeek}</div>)}
                                 <div className="flex items-start gap-3 mb-4">
                                     <button className="mt-1 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500"><GripVertical size={20}/></button>
                                     <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Esercizio</label><input value={data.name} onChange={(e) => updateExercise(idx, 'name', e.target.value)} className="w-full text-lg font-bold text-slate-900 outline-none placeholder:text-slate-300" placeholder="Nome Esercizio"/></div>
