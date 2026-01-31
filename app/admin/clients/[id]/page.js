@@ -21,8 +21,11 @@ import {
   LayoutDashboard,
   ClipboardList,
   Ruler,
+  History,
+  Calendar
 } from "lucide-react";
 
+// --- COMPONENTE TAB BUTTON ---
 const TabBtn = ({ id, activeTab, setActiveTab, icon: Icon, children }) => {
   const active = activeTab === id;
   return (
@@ -30,8 +33,8 @@ const TabBtn = ({ id, activeTab, setActiveTab, icon: Icon, children }) => {
       onClick={() => setActiveTab(id)}
       className={`px-4 py-2 rounded-full font-bold text-sm flex items-center gap-2 transition border ${
         active
-          ? "bg-slate-900 text-white border-slate-900 shadow"
-          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+          ? "bg-slate-900 text-white border-slate-900 shadow-md transform scale-105"
+          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
       }`}
     >
       <Icon size={16} />
@@ -40,847 +43,440 @@ const TabBtn = ({ id, activeTab, setActiveTab, icon: Icon, children }) => {
   );
 };
 
+// --- COMPONENTE INPUT MISURA ---
+const MeasureInput = ({ label, value, onChange, placeholder }) => (
+  <div className="flex flex-col gap-1">
+    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</label>
+    <div className="relative">
+      <input
+        type="number"
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 transition-all placeholder:font-normal"
+      />
+      <span className="absolute right-3 top-2 text-xs text-slate-400 font-medium">cm</span>
+    </div>
+  </div>
+);
+
 export default function ClientPage({ params }) {
   const { id } = use(params);
   const router = useRouter();
 
   const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
+  // TUA CHIAVE CORRETTA
   const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
 
-  // NB: ho lasciato la tua key com'è nel tuo codice: se l’hai diversa, rimetti la tua originale.
   const supabase = createClient(supabaseUrl, supabaseKey);
 
+  // STATI DATI
   const [client, setClient] = useState(null);
   const [programs, setPrograms] = useState([]);
   const [recentLogs, setRecentLogs] = useState([]);
-  const [metrics, setMetrics] = useState([]);
+  const [metrics, setMetrics] = useState([]); // Storico pesi
+  const [bodyMeasuresHistory, setBodyMeasuresHistory] = useState([]); // Storico misure corpo
   const [loading, setLoading] = useState(true);
 
   // TAB UI
   const [activeTab, setActiveTab] = useState("overview");
 
-  // form anagrafica
+  // FORM ANAGRAFICA
   const [profile, setProfile] = useState({
-    full_name: "",
-    gender: "F",
-    email: "",
-    phone: "",
-    birth_date: "",
-    height_cm: "",
-    current_weight_kg: "",
-    goal: "",
+    full_name: "", gender: "F", email: "", phone: "",
+    birth_date: "", height_cm: "", current_weight_kg: "", goal: "",
   });
   const [savingProfile, setSavingProfile] = useState(false);
 
-  // peso (storico)
+  // FORM PESO
   const [newWeight, setNewWeight] = useState("");
   const [savingWeight, setSavingWeight] = useState(false);
 
-  // MODALE: nuova scheda
+  // FORM MISURE CORPO
+  const [bodyForm, setBodyForm] = useState({
+    neck: "", chest: "", waist: "", hips: "",
+    thigh: "", arm: "", calf: ""
+  });
+  const [savingBody, setSavingBody] = useState(false);
+
+  // MODALE SCHEDA
   const [showCreateProgram, setShowCreateProgram] = useState(false);
   const [cpTitle, setCpTitle] = useState("");
   const [cpDuration, setCpDuration] = useState(4);
   const [creatingProgram, setCreatingProgram] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  useEffect(() => { fetchData(); }, [id]);
 
   const fetchData = async () => {
     setLoading(true);
 
-    const { data: clientData, error: cErr } = await supabase
-      .from("clients")
-      .select("*")
-      .eq("id", id)
-      .single();
-
-    if (cErr) {
-      alert("Errore client: " + cErr.message);
-      setLoading(false);
-      return;
+    // 1. Cliente
+    const { data: clientData } = await supabase.from("clients").select("*").eq("id", id).single();
+    if (clientData) {
+      setClient(clientData);
+      setProfile({
+        full_name: clientData.full_name || "",
+        gender: clientData.gender || "F",
+        email: clientData.email || "",
+        phone: clientData.phone || "",
+        birth_date: clientData.birth_date || "",
+        height_cm: clientData.height_cm ?? "",
+        current_weight_kg: clientData.current_weight_kg ?? "",
+        goal: clientData.goal || "",
+      });
     }
 
-    setClient(clientData);
-
-    setProfile({
-      full_name: clientData?.full_name || "",
-      gender: clientData?.gender || "F",
-      email: clientData?.email || "",
-      phone: clientData?.phone || "",
-      birth_date: clientData?.birth_date || "",
-      height_cm: clientData?.height_cm ?? "",
-      current_weight_kg: clientData?.current_weight_kg ?? "",
-      goal: clientData?.goal || "",
-    });
-
-    const { data: programsData } = await supabase
-      .from("programs")
-      .select("*")
-      .eq("client_id", id)
-      .order("created_at", { ascending: false });
-
+    // 2. Schede
+    const { data: programsData } = await supabase.from("programs").select("*").eq("client_id", id).order("created_at", { ascending: false });
     setPrograms(programsData || []);
 
-    if (programsData && programsData.length > 0) {
+    // 3. Log Recenti
+    if (programsData?.length > 0) {
       const progIds = programsData.map((p) => p.id);
-      const { data: simpleLogs } = await supabase
-        .from("workout_logs")
-        .select("*")
-        .in("program_id", progIds)
-        .order("created_at", { ascending: false })
-        .limit(20);
+      const { data: simpleLogs } = await supabase.from("workout_logs").select("*").in("program_id", progIds).order("created_at", { ascending: false }).limit(20);
       setRecentLogs(simpleLogs || []);
-    } else {
-      setRecentLogs([]);
     }
 
-    // storico peso (client_metrics)
-    const { data: mData, error: mErr } = await supabase
-      .from("client_metrics")
-      .select("*")
-      .eq("client_id", id)
-      .order("measured_at", { ascending: false })
-      .limit(12);
+    // 4. Storico Peso
+    const { data: mData } = await supabase.from("client_metrics").select("*").eq("client_id", id).order("measured_at", { ascending: false }).limit(20);
+    setMetrics(mData || []);
 
-    if (mErr) {
-      console.error(mErr);
-      setMetrics([]);
-    } else {
-      setMetrics(mData || []);
-    }
+    // 5. Storico Misure Corporee
+    const { data: bData } = await supabase.from("client_measurements").select("*").eq("client_id", id).order("measured_at", { ascending: false }).limit(10);
+    setBodyMeasuresHistory(bData || []);
 
     setLoading(false);
   };
 
-  const onProfileChange = (k, v) => setProfile((p) => ({ ...p, [k]: v }));
+  // --- FUNZIONI SALVATAGGIO ---
 
   const saveProfile = async () => {
     const fullName = (profile.full_name || "").trim();
-    if (!fullName) {
-      alert("Nome e cognome obbligatorio.");
-      return;
-    }
-
+    if (!fullName) return alert("Nome obbligatorio.");
     setSavingProfile(true);
-
+    
     const payload = {
       full_name: fullName,
-      gender: profile.gender || null,
-      email: (profile.email || "").trim() || null,
-      phone: (profile.phone || "").trim() || null,
+      gender: profile.gender,
+      email: profile.email,
+      phone: profile.phone,
       birth_date: profile.birth_date || null,
-      height_cm: profile.height_cm !== "" ? Number(profile.height_cm) : null,
-      current_weight_kg:
-        profile.current_weight_kg !== "" ? Number(profile.current_weight_kg) : null,
-      goal: (profile.goal || "").trim() || null,
+      height_cm: profile.height_cm ? Number(profile.height_cm) : null,
+      current_weight_kg: profile.current_weight_kg ? Number(profile.current_weight_kg) : null,
+      goal: profile.goal
     };
 
-    const { error } = await supabase.from("clients").update(payload).eq("id", id);
-
+    await supabase.from("clients").update(payload).eq("id", id);
     setSavingProfile(false);
-
-    if (error) {
-      alert("Errore salvataggio: " + error.message);
-      return;
-    }
-
     fetchData();
   };
 
   const addWeight = async () => {
-    const w = String(newWeight).replace(",", ".").trim();
-    if (!w) return;
-
-    const num = Number(w);
-    if (!Number.isFinite(num) || num <= 0) {
-      alert("Peso non valido.");
-      return;
-    }
-
+    const w = Number(newWeight.replace(",", "."));
+    if (!w || w <= 0) return alert("Peso non valido");
     setSavingWeight(true);
-
-    // 1) inserisco nello storico
-    const { error: insErr } = await supabase.from("client_metrics").insert([
-      {
-        client_id: id,
-        weight_kg: num,
-      },
-    ]);
-
-    if (insErr) {
-      setSavingWeight(false);
-      alert("Errore storico peso: " + insErr.message);
-      return;
-    }
-
-    // 2) aggiorno peso corrente sul client
-    const { error: updErr } = await supabase
-      .from("clients")
-      .update({ current_weight_kg: num })
-      .eq("id", id);
-
+    
+    await supabase.from("client_metrics").insert([{ client_id: id, weight_kg: w }]);
+    await supabase.from("clients").update({ current_weight_kg: w }).eq("id", id);
+    
     setSavingWeight(false);
-
-    if (updErr) {
-      alert(
-        "Peso salvato nello storico, ma errore aggiornando il profilo: " + updErr.message
-      );
-      setNewWeight("");
-      fetchData();
-      return;
-    }
-
     setNewWeight("");
     fetchData();
   };
 
-  // ---- CREAZIONE SCHEDA: MODALE ----
-  const openCreateProgram = () => {
-    setCpTitle("");
-    setCpDuration(4);
-    setCreatingProgram(false);
-    setShowCreateProgram(true);
+  const saveBodyMeasures = async () => {
+    const hasData = Object.values(bodyForm).some(val => val !== "");
+    if (!hasData) return alert("Inserisci almeno una misura.");
+    
+    setSavingBody(true);
+    const payload = {
+        client_id: id,
+        neck_cm: bodyForm.neck ? Number(bodyForm.neck) : null,
+        chest_cm: bodyForm.chest ? Number(bodyForm.chest) : null,
+        waist_cm: bodyForm.waist ? Number(bodyForm.waist) : null,
+        hips_cm: bodyForm.hips ? Number(bodyForm.hips) : null,
+        thigh_cm: bodyForm.thigh ? Number(bodyForm.thigh) : null,
+        arm_cm: bodyForm.arm ? Number(bodyForm.arm) : null,
+        calf_cm: bodyForm.calf ? Number(bodyForm.calf) : null,
+    };
+
+    const { error } = await supabase.from("client_measurements").insert([payload]);
+    if(error) alert("Errore: " + error.message);
+    else {
+        setBodyForm({ neck: "", chest: "", waist: "", hips: "", thigh: "", arm: "", calf: "" });
+        fetchData();
+    }
+    setSavingBody(false);
   };
 
-  const closeCreateProgram = () => {
-    setShowCreateProgram(false);
-    setCreatingProgram(false);
-  };
-
+  // --- CREAZIONE SCHEDA ---
   const createProgram = async () => {
-    const title = (cpTitle || "").trim();
-    if (!title) {
-      alert("Inserisci il nome della scheda.");
-      return;
-    }
-
-    const duration = Number(cpDuration);
-    if (!Number.isFinite(duration) || duration <= 0 || duration > 52) {
-      alert("Durata non valida (1-52).");
-      return;
-    }
-
+    if (!cpTitle.trim()) return alert("Nome scheda obbligatorio");
     setCreatingProgram(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    const coachName = user?.user_metadata?.name || "COACH";
+    
+    const { data, error } = await supabase.from("programs").insert([{ 
+        client_id: id, title: cpTitle, coach_name: coachName, duration: Number(cpDuration) 
+    }]).select().single();
 
-    const { data: auth } = await supabase.auth.getUser();
-    const user = auth?.user;
-
-    let coachName = "COACH";
-    if (user) {
-      coachName =
-        user.user_metadata?.name ||
-        user.user_metadata?.full_name ||
-        user.email?.split("@")[0] ||
-        "COACH";
-    }
-
-    const { data, error } = await supabase
-      .from("programs")
-      .insert([{ client_id: id, title, coach_name: coachName, duration }])
-      .select()
-      .single();
-
-    if (error) {
-      setCreatingProgram(false);
-      alert("Errore: " + error.message);
-      return;
-    }
-
-    closeCreateProgram();
-    router.push(`/admin/editor/${data.id}`);
+    if (data) router.push(`/admin/editor/${data.id}`);
+    else { alert(error.message); setCreatingProgram(false); }
   };
 
-  const deleteProgram = async (programId) => {
-    if (!confirm("Sei sicuro di voler eliminare questa scheda?")) return;
-    const { error } = await supabase.from("programs").delete().eq("id", programId);
-    if (error) alert("Errore: " + error.message);
-    else fetchData();
-  };
-
-  const copyLink = (programId) => {
-    const link = `${window.location.origin}/live/${programId}`;
-    if (navigator.share) {
-      navigator
-        .share({
-          title: "Scheda Allenamento",
-          text: "Ecco la tua nuova scheda!",
-          url: link,
-        })
-        .catch(console.error);
-    } else {
-      navigator.clipboard.writeText(link);
-      alert("Link copiato! Invialo all'atleta.");
+  const deleteProgram = async (pid) => {
+    if (confirm("Eliminare scheda?")) {
+        await supabase.from("programs").delete().eq("id", pid);
+        fetchData();
     }
   };
 
-  if (loading) return <div className="p-8 text-slate-500">Caricamento profilo...</div>;
-
-  const displayName = (client?.full_name || "").trim() || "Senza nome";
-  const latestWeight = metrics?.[0]?.weight_kg ?? null;
-  const latestWeightDate = metrics?.[0]?.measured_at ?? null;
-  const lastLog = recentLogs?.[0] ?? null;
+  if (loading) return <div className="p-10 text-center text-slate-500 font-sans">Caricamento profilo...</div>;
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans p-6">
-      <div className="max-w-5xl mx-auto space-y-6">
-        {/* HEADER CLIENTE */}
-        <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-slate-50 font-sans p-6 pb-20">
+      <div className="max-w-6xl mx-auto space-y-6">
+        
+        {/* HEADER */}
+        <div className="flex items-center justify-between bg-white p-4 rounded-3xl shadow-sm border border-slate-100">
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push("/admin/dashboard")}
-              className="p-2 hover:bg-slate-200 rounded-full transition"
-            >
-              <ArrowLeft size={24} className="text-slate-600" />
+            <button onClick={() => router.push("/admin/dashboard")} className="p-3 hover:bg-slate-100 rounded-full transition text-slate-500">
+              <ArrowLeft size={24} />
             </button>
             <div>
-              <h1 className="text-3xl font-bold text-slate-900 uppercase">{displayName}</h1>
-              <div className="text-xs text-slate-500 mt-1">
-                {client?.email || client?.phone ? (
-                  <span>{client?.email || client?.phone}</span>
-                ) : (
-                  <span className="italic">Nessun contatto salvato</span>
-                )}
-              </div>
+              <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">{client?.full_name}</h1>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Atleta</span>
             </div>
           </div>
-
-          <button
-            onClick={openCreateProgram}
-            className="bg-slate-900 text-white px-5 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-black transition active:scale-95"
-          >
-            <Plus size={20} /> NUOVA SCHEDA
+          <button onClick={() => setShowCreateProgram(true)} className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-xl hover:bg-black transition transform active:scale-95">
+            <Plus size={20} /> <span className="hidden sm:inline">Nuova Scheda</span>
           </button>
         </div>
 
-        {/* TABS */}
-        <div className="flex flex-wrap gap-2">
-          <TabBtn id="overview" activeTab={activeTab} setActiveTab={setActiveTab} icon={LayoutDashboard}>
-            Panoramica
-          </TabBtn>
-          <TabBtn id="profile" activeTab={activeTab} setActiveTab={setActiveTab} icon={User}>
-            Anagrafica
-          </TabBtn>
-          <TabBtn id="measures" activeTab={activeTab} setActiveTab={setActiveTab} icon={Ruler}>
-            Misure
-          </TabBtn>
-          <TabBtn id="programs" activeTab={activeTab} setActiveTab={setActiveTab} icon={Dumbbell}>
-            Schede
-          </TabBtn>
-          <TabBtn id="activity" activeTab={activeTab} setActiveTab={setActiveTab} icon={Activity}>
-            Attività
-          </TabBtn>
+        {/* NAVIGAZIONE TABS */}
+        <div className="flex flex-wrap gap-2 sticky top-2 z-10 bg-slate-50/90 backdrop-blur py-2">
+          <TabBtn id="overview" activeTab={activeTab} setActiveTab={setActiveTab} icon={LayoutDashboard}>Panoramica</TabBtn>
+          <TabBtn id="measures" activeTab={activeTab} setActiveTab={setActiveTab} icon={Ruler}>Misure</TabBtn>
+          <TabBtn id="programs" activeTab={activeTab} setActiveTab={setActiveTab} icon={Dumbbell}>Schede</TabBtn>
+          <TabBtn id="activity" activeTab={activeTab} setActiveTab={setActiveTab} icon={Activity}>Attività</TabBtn>
+          <TabBtn id="profile" activeTab={activeTab} setActiveTab={setActiveTab} icon={User}>Profilo</TabBtn>
         </div>
 
-        {/* TAB: PANORAMICA */}
+        {/* --- CONTENUTO TAB --- */}
+
+        {/* 1. PANORAMICA */}
         {activeTab === "overview" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Card profilo rapido */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-              <div className="text-xs font-bold text-slate-400 uppercase mb-2">Profilo</div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm text-slate-600">Sesso</div>
-                  <div className="font-extrabold text-slate-900">
-                    {profile.gender === "M" ? "Maschio" : "Femmina"}
-                  </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-2 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                    <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Activity className="text-blue-500"/> Ultimo Allenamento</h2>
+                    {recentLogs.length > 0 ? (
+                        <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl">
+                             <div className="flex justify-between items-start mb-2">
+                                <span className="font-bold text-slate-900 text-lg capitalize">{recentLogs[0].exercise_name}</span>
+                                <span className="text-[10px] uppercase font-bold bg-white border px-2 py-1 rounded text-slate-500">{new Date(recentLogs[0].created_at).toLocaleDateString()}</span>
+                             </div>
+                             <div className="flex gap-4 text-sm font-mono text-slate-600">
+                                <div><span className="text-slate-400">Set:</span> {recentLogs[0].actual_sets || "-"}</div>
+                                <div><span className="text-slate-400">Reps:</span> {recentLogs[0].actual_reps}</div>
+                                <div><span className="text-slate-400">Kg:</span> <span className="text-green-600 font-bold">{recentLogs[0].actual_weight}</span></div>
+                             </div>
+                        </div>
+                    ) : <p className="text-slate-400 italic">Nessuna attività recente.</p>}
                 </div>
-                <div className="border border-slate-200 rounded-xl bg-slate-50 flex items-center justify-center px-3 py-2">
-                  <img
-                    src={profile.gender === "M" ? "/body-male.png" : "/body-female.png"}
-                    alt="Sagoma"
-                    className="h-20 object-contain opacity-90"
-                  />
+                
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex flex-col justify-center items-center text-center">
+                    <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 mb-3">
+                        <Scale size={32}/>
+                    </div>
+                    <div className="text-3xl font-black text-slate-900">{metrics[0]?.weight_kg || "-"} <span className="text-lg text-slate-400 font-medium">kg</span></div>
+                    <div className="text-xs font-bold text-slate-400 uppercase mt-1">Peso attuale</div>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 mt-4">
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <div className="text-[11px] font-bold text-slate-400 uppercase">Altezza</div>
-                  <div className="text-lg font-extrabold text-slate-900">
-                    {profile.height_cm ? `${profile.height_cm} cm` : "-"}
-                  </div>
-                </div>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <div className="text-[11px] font-bold text-slate-400 uppercase">Peso attuale</div>
-                  <div className="text-lg font-extrabold text-slate-900">
-                    {profile.current_weight_kg !== "" && profile.current_weight_kg !== null
-                      ? `${profile.current_weight_kg} kg`
-                      : "-"}
-                  </div>
-                </div>
-              </div>
             </div>
-
-            {/* Card peso ultimo */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-              <div className="text-xs font-bold text-slate-400 uppercase mb-2">Ultimo peso</div>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center">
-                  <Scale size={18} />
-                </div>
-                <div>
-                  <div className="text-2xl font-extrabold text-slate-900">
-                    {latestWeight ? `${latestWeight} kg` : "-"}
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {latestWeightDate ? new Date(latestWeightDate).toLocaleString() : "Nessun dato"}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 text-sm text-slate-600">
-                Schede create: <span className="font-bold text-slate-900">{programs.length}</span>
-              </div>
-
-              <button
-                onClick={() => setActiveTab("measures")}
-                className="mt-4 w-full h-11 rounded-xl bg-slate-100 border border-slate-200 font-bold text-slate-800 hover:bg-slate-200 transition"
-              >
-                Vai a Misure
-              </button>
-            </div>
-
-            {/* Card ultima attività */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-              <div className="text-xs font-bold text-slate-400 uppercase mb-2">Ultima attività</div>
-
-              {!lastLog ? (
-                <div className="text-sm text-slate-500 italic">
-                  Nessun progresso registrato dall’atleta.
-                </div>
-              ) : (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="font-extrabold text-slate-900">{lastLog.exercise_name}</div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase bg-white border border-slate-200 px-2 py-1 rounded">
-                      {lastLog.day_label} • W{lastLog.week_number}
-                    </div>
-                  </div>
-
-                  <div className="text-xs text-slate-600 font-mono">
-                    <div className="flex justify-between border-b border-slate-200/50 pb-1 mb-1">
-                      <span>Reps:</span>
-                      <span className="font-bold text-slate-900">
-                        {(lastLog.actual_reps || "").split("-").join(", ")}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Carico:</span>
-                      <span className="font-bold text-green-700">
-                        {(lastLog.actual_weight || "").split("-").join(", ")} Kg
-                      </span>
-                    </div>
-                  </div>
-
-                  {lastLog.athlete_notes && (
-                    <div className="mt-3 bg-yellow-50 text-yellow-800 p-2 rounded-lg text-xs italic border border-yellow-100">
-                      "{lastLog.athlete_notes}"
-                    </div>
-                  )}
-
-                  <div className="text-right mt-2 text-[10px] text-slate-400">
-                    {new Date(lastLog.created_at).toLocaleString()}
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={() => setActiveTab("activity")}
-                className="mt-4 w-full h-11 rounded-xl bg-slate-900 text-white font-extrabold hover:bg-black transition"
-              >
-                Apri Attività completa
-              </button>
-            </div>
-          </div>
         )}
 
-        {/* TAB: ANAGRAFICA */}
-        {activeTab === "profile" && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <PencilLine size={18} /> Anagrafica
-              </h2>
-              <button
-                onClick={saveProfile}
-                disabled={savingProfile}
-                className="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-500 transition flex items-center gap-2 disabled:opacity-50"
-              >
-                <Save size={16} /> {savingProfile ? "Salvataggio..." : "Salva"}
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="md:col-span-2">
-                <label className="text-xs font-bold text-slate-600">Nome e cognome *</label>
-                <input
-                  value={profile.full_name}
-                  onChange={(e) => onProfileChange("full_name", e.target.value)}
-                  className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
-                  placeholder="Es. Mario Rossi"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">Sesso</label>
-                <select
-                  value={profile.gender}
-                  onChange={(e) => onProfileChange("gender", e.target.value)}
-                  className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500 bg-white"
-                >
-                  <option value="F">Femmina</option>
-                  <option value="M">Maschio</option>
-                </select>
-              </div>
-
-              <div className="border border-slate-200 rounded-xl bg-slate-50 flex items-center justify-center p-3">
-                <img
-                  src={profile.gender === "M" ? "/body-male.png" : "/body-female.png"}
-                  alt="Sagoma"
-                  className="h-24 object-contain opacity-90"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">Email</label>
-                <input
-                  value={profile.email}
-                  onChange={(e) => onProfileChange("email", e.target.value)}
-                  className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
-                  placeholder="mario@email.it"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">Telefono</label>
-                <input
-                  value={profile.phone}
-                  onChange={(e) => onProfileChange("phone", e.target.value)}
-                  className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
-                  placeholder="+39..."
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">Data di nascita</label>
-                <input
-                  type="date"
-                  value={profile.birth_date || ""}
-                  onChange={(e) => onProfileChange("birth_date", e.target.value)}
-                  className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">Altezza (cm)</label>
-                <input
-                  inputMode="numeric"
-                  value={profile.height_cm}
-                  onChange={(e) => onProfileChange("height_cm", e.target.value)}
-                  className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
-                  placeholder="180"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">Peso attuale (kg)</label>
-                <input
-                  inputMode="decimal"
-                  value={profile.current_weight_kg}
-                  onChange={(e) => onProfileChange("current_weight_kg", e.target.value)}
-                  className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
-                  placeholder="82.5"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="text-xs font-bold text-slate-600">Obiettivo</label>
-                <input
-                  value={profile.goal}
-                  onChange={(e) => onProfileChange("goal", e.target.value)}
-                  className="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
-                  placeholder="Dimagrimento / Forza / Massa..."
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB: MISURE */}
+        {/* 2. MISURE (GRAFICA MIGLIORATA) */}
         {activeTab === "measures" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Peso storico */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm lg:col-span-1">
-              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-3">
-                <Scale size={18} /> Peso (storico)
-              </h2>
-
-              <div className="flex gap-2 mb-4">
-                <input
-                  inputMode="decimal"
-                  value={newWeight}
-                  onChange={(e) => setNewWeight(e.target.value)}
-                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500"
-                  placeholder="Es. 82.5"
-                />
-                <button
-                  onClick={addWeight}
-                  disabled={savingWeight}
-                  className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold hover:bg-black transition disabled:opacity-50"
-                >
-                  {savingWeight ? "..." : "Registra"}
-                </button>
-              </div>
-
-              {metrics.length === 0 ? (
-                <div className="text-sm text-slate-500 italic">Nessuna misura registrata.</div>
-              ) : (
-                <div className="space-y-2">
-                  {metrics.map((m) => (
-                    <div
-                      key={m.id}
-                      className="flex justify-between items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
-                    >
-                      <div className="text-sm font-bold text-slate-800">{m.weight_kg} kg</div>
-                      <div className="text-xs text-slate-500">
-                        {new Date(m.measured_at).toLocaleDateString()}{" "}
-                        {new Date(m.measured_at).toLocaleTimeString().slice(0, 5)}
-                      </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* COLONNA SINISTRA: PESO */}
+            <div className="space-y-6">
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4"><Scale size={20} className="text-blue-500"/> Peso Corporeo</h3>
+                    
+                    <div className="flex gap-2 mb-6">
+                        <input 
+                            type="number" 
+                            placeholder="kg" 
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-lg outline-none focus:bg-white focus:border-blue-500 transition"
+                            value={newWeight}
+                            onChange={(e) => setNewWeight(e.target.value)}
+                        />
+                        <button onClick={addWeight} disabled={savingWeight} className="bg-slate-900 text-white px-5 rounded-xl font-bold hover:bg-black transition disabled:opacity-50">
+                            {savingWeight ? "..." : <Plus/>}
+                        </button>
                     </div>
-                  ))}
+
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                        {metrics.map(m => (
+                            <div key={m.id} className="flex justify-between items-center p-3 rounded-xl border border-slate-100 hover:border-blue-200 transition bg-slate-50/50">
+                                <span className="font-bold text-slate-700">{m.weight_kg} kg</span>
+                                <span className="text-xs font-medium text-slate-400 flex items-center gap-1"><Calendar size={12}/> {new Date(m.measured_at).toLocaleDateString()}</span>
+                            </div>
+                        ))}
+                        {metrics.length === 0 && <p className="text-center text-slate-400 text-sm py-4">Nessun peso registrato.</p>}
+                    </div>
                 </div>
-              )}
             </div>
 
-            {/* Placeholder misure corpo (step 2) */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm lg:col-span-2">
-              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-3">
-                <Ruler size={18} /> Misure corpo
-              </h2>
+            {/* COLONNA DESTRA: MISURE CORPOREE */}
+            <div className="lg:col-span-2 space-y-6">
+                
+                {/* FORM NUOVA MISURAZIONE */}
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="font-bold text-slate-800 flex items-center gap-2"><Ruler size={20} className="text-indigo-500"/> Nuova Misurazione</h3>
+                        <button onClick={saveBodyMeasures} disabled={savingBody} className="text-xs font-bold bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition">
+                            {savingBody ? "Salvataggio..." : "SALVA MISURE"}
+                        </button>
+                    </div>
 
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-600 text-sm">
-                Qui aggiungiamo nel prossimo step:
-                <ul className="list-disc ml-6 mt-2 space-y-1">
-                  <li>Form misure (vita, fianchi, torace, braccio, coscia…)</li>
-                  <li>Storico misure in tabella</li>
-                  <li>Integrazione con tabella <b>client_measurements</b></li>
-                </ul>
-              </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <MeasureInput label="Collo" placeholder="0" value={bodyForm.neck} onChange={v => setBodyForm({...bodyForm, neck: v})}/>
+                        <MeasureInput label="Petto" placeholder="0" value={bodyForm.chest} onChange={v => setBodyForm({...bodyForm, chest: v})}/>
+                        <MeasureInput label="Braccio" placeholder="0" value={bodyForm.arm} onChange={v => setBodyForm({...bodyForm, arm: v})}/>
+                        <MeasureInput label="Vita" placeholder="0" value={bodyForm.waist} onChange={v => setBodyForm({...bodyForm, waist: v})}/>
+                        <MeasureInput label="Fianchi" placeholder="0" value={bodyForm.hips} onChange={v => setBodyForm({...bodyForm, hips: v})}/>
+                        <MeasureInput label="Coscia" placeholder="0" value={bodyForm.thigh} onChange={v => setBodyForm({...bodyForm, thigh: v})}/>
+                        <MeasureInput label="Polpaccio" placeholder="0" value={bodyForm.calf} onChange={v => setBodyForm({...bodyForm, calf: v})}/>
+                    </div>
+                </div>
+
+                {/* STORICO MISURE */}
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4"><History size={20} className="text-slate-400"/> Storico Misure</h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-[10px] text-slate-400 uppercase font-bold border-b border-slate-100">
+                                <tr>
+                                    <th className="py-3 pl-2">Data</th>
+                                    <th className="py-3">Petto</th>
+                                    <th className="py-3">Vita</th>
+                                    <th className="py-3">Fianchi</th>
+                                    <th className="py-3">Braccio</th>
+                                    <th className="py-3">Coscia</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                                {bodyMeasuresHistory.length === 0 ? (
+                                    <tr><td colSpan="6" className="py-4 text-center text-slate-400 italic">Nessuna misurazione salvata.</td></tr>
+                                ) : (
+                                    bodyMeasuresHistory.map(bm => (
+                                        <tr key={bm.id} className="hover:bg-slate-50 transition">
+                                            <td className="py-3 pl-2 font-bold text-slate-700">{new Date(bm.measured_at).toLocaleDateString()}</td>
+                                            <td className="py-3 text-slate-600">{bm.chest_cm || "-"}</td>
+                                            <td className="py-3 text-slate-600">{bm.waist_cm || "-"}</td>
+                                            <td className="py-3 text-slate-600">{bm.hips_cm || "-"}</td>
+                                            <td className="py-3 text-slate-600">{bm.arm_cm || "-"}</td>
+                                            <td className="py-3 text-slate-600">{bm.thigh_cm || "-"}</td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
             </div>
           </div>
         )}
 
-        {/* TAB: SCHEDE */}
+        {/* 3. SCHEDE */}
         {activeTab === "programs" && (
-          <div className="space-y-6">
-            <h2 className="text-lg font-bold text-slate-700 flex items-center gap-2">
-              <Dumbbell size={20} /> Schede Allenamento
-            </h2>
-
-            {programs.length === 0 ? (
-              <div className="bg-white p-8 rounded-2xl border border-dashed border-slate-300 text-center text-slate-400">
-                Nessuna scheda. Clicca su "Nuova Scheda".
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {programs.map((prog) => (
-                  <div
-                    key={prog.id}
-                    className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 group hover:border-blue-400 transition-all"
-                  >
-                    <div>
-                      <h3 className="font-bold text-lg text-slate-800">{prog.title}</h3>
-                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-1 uppercase font-bold tracking-wide">
-                        <span className="bg-slate-100 px-2 py-1 rounded text-slate-600 border border-slate-200">
-                          {prog.duration} Settimane
-                        </span>
-                        <span className="text-slate-400 flex items-center gap-1">
-                          <Clock size={12} /> {new Date(prog.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
+            <div className="space-y-4">
+                {programs.length === 0 ? <div className="text-center py-10 text-slate-400 bg-white rounded-3xl border border-dashed border-slate-300">Nessuna scheda creata.</div> : 
+                 programs.map(p => (
+                    <div key={p.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 hover:border-blue-300 transition group">
+                        <div className="w-full md:w-auto">
+                            <h3 className="font-bold text-lg text-slate-800">{p.title}</h3>
+                            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">{p.duration} Settimane • {new Date(p.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <div className="flex gap-2 w-full md:w-auto">
+                            <button onClick={() => router.push(`/admin/editor/${p.id}`)} className="flex-1 md:flex-none bg-slate-100 text-slate-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-200 transition">MODIFICA</button>
+                            <button onClick={() => window.open(`/live/${p.id}`,'_blank')} className="flex-1 md:flex-none bg-green-50 text-green-600 px-4 py-2 rounded-lg text-xs font-bold hover:bg-green-100 transition flex items-center justify-center gap-1"><ExternalLink size={14}/> LIVE</button>
+                            <button onClick={() => deleteProgram(p.id)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition"><Trash2 size={18}/></button>
+                        </div>
                     </div>
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <button
-                        onClick={() => router.push(`/admin/editor/${prog.id}`)}
-                        className="px-3 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200 transition text-xs"
-                      >
-                        MODIFICA
-                      </button>
-
-                      <button
-                        onClick={() => window.open(`/live/${prog.id}`, "_blank")}
-                        className="px-3 py-2 bg-green-50 text-green-600 font-bold rounded-lg hover:bg-green-100 transition text-xs flex items-center gap-1"
-                      >
-                        <ExternalLink size={14} /> APRI LIVE
-                      </button>
-
-                      <button
-                        onClick={() => copyLink(prog.id)}
-                        className="px-3 py-2 bg-blue-50 text-blue-600 font-bold rounded-lg hover:bg-blue-100 transition text-xs flex items-center gap-1"
-                      >
-                        <Share2 size={14} /> CONDIVIDI
-                      </button>
-
-                      <button
-                        onClick={() => deleteProgram(prog.id)}
-                        className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
-                        title="Elimina"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB: ATTIVITÀ */}
-        {activeTab === "activity" && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold text-slate-700 flex items-center gap-2">
-              <ClipboardList size={20} className="text-green-600" /> Attività Recente
-            </h2>
-
-            <div className="bg-white rounded-2xl p-4 border border-slate-200">
-              {recentLogs.length === 0 ? (
-                <div className="text-center text-slate-400 py-10 text-sm">
-                  Ancora nessun dato registrato dall&apos;atleta.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {recentLogs.map((log) => {
-                    const reps = (log.actual_reps || "").split("-").join(", ");
-                    const weights = (log.actual_weight || "").split("-").join(", ");
-
-                    return (
-                      <div
-                        key={log.id}
-                        className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-sm"
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="font-bold text-slate-800 capitalize">
-                            {log.exercise_name}
-                          </span>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                            {log.day_label} • W{log.week_number}
-                          </span>
-                        </div>
-                        <div className="text-slate-600 mb-2 font-mono text-xs">
-                          <div className="flex justify-between border-b border-slate-200/50 pb-1 mb-1">
-                            <span>Reps:</span>{" "}
-                            <span className="font-bold text-slate-900">{reps}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Carico:</span>{" "}
-                            <span className="font-bold text-green-700">{weights} Kg</span>
-                          </div>
-                        </div>
-                        {log.athlete_notes && (
-                          <div className="bg-yellow-50 text-yellow-800 p-2 rounded-lg text-xs italic border border-yellow-100">
-                            "{log.athlete_notes}"
-                          </div>
-                        )}
-                        <div className="text-right mt-2">
-                          <span className="text-[10px] text-slate-400">
-                            {new Date(log.created_at).toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                 ))}
             </div>
-          </div>
         )}
+
+        {/* 4. ATTIVITA */}
+        {activeTab === "activity" && (
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 space-y-4">
+                <h3 className="font-bold text-slate-800 mb-4">Log Allenamenti Recenti</h3>
+                {recentLogs.map(log => (
+                    <div key={log.id} className="flex justify-between items-center border-b border-slate-50 pb-3 last:border-0 last:pb-0">
+                        <div>
+                            <div className="font-bold text-slate-700 capitalize">{log.exercise_name}</div>
+                            <div className="text-xs text-slate-400">{log.day_label} • {new Date(log.created_at).toLocaleDateString()}</div>
+                        </div>
+                        <div className="text-right">
+                             <div className="font-mono font-bold text-slate-800">{log.actual_reps} reps</div>
+                             <div className="font-mono text-xs font-bold text-green-600">{log.actual_weight} kg</div>
+                        </div>
+                    </div>
+                ))}
+                {recentLogs.length === 0 && <p className="text-slate-400 text-sm italic">Nessun log trovato.</p>}
+            </div>
+        )}
+
+        {/* 5. PROFILO */}
+        {activeTab === "profile" && (
+             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 max-w-2xl mx-auto">
+                <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><User size={20}/> Modifica Anagrafica</h3>
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase">Nome Completo</label>
+                        <input value={profile.full_name} onChange={e => setProfile({...profile, full_name: e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold text-slate-800 outline-none focus:border-blue-500"/>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase">Email</label>
+                            <input value={profile.email} onChange={e => setProfile({...profile, email: e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 p-3 rounded-xl font-medium text-slate-800 outline-none focus:border-blue-500"/>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase">Telefono</label>
+                            <input value={profile.phone} onChange={e => setProfile({...profile, phone: e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 p-3 rounded-xl font-medium text-slate-800 outline-none focus:border-blue-500"/>
+                        </div>
+                    </div>
+                    <button onClick={saveProfile} disabled={savingProfile} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-black transition mt-4 disabled:opacity-50">{savingProfile ? "Salvataggio..." : "Salva Modifiche"}</button>
+                </div>
+             </div>
+        )}
+
       </div>
 
-      {/* MODALE: CREA NUOVA SCHEDA */}
+      {/* MODALE NUOVA SCHEDA */}
       {showCreateProgram && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-slate-900/60"
-            onClick={closeCreateProgram}
-          />
-
-          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <div className="text-xs font-bold text-slate-400 uppercase">Nuova scheda</div>
-                <div className="text-lg font-extrabold text-slate-900 leading-tight">
-                  Crea un programma per {displayName}
-                </div>
-              </div>
-              <button
-                onClick={closeCreateProgram}
-                className="p-2 rounded-full hover:bg-slate-100 text-slate-500"
-                aria-label="Chiudi"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="text-[11px] font-bold text-slate-500 uppercase">
-                  Nome scheda *
-                </label>
-                <input
-                  value={cpTitle}
-                  onChange={(e) => setCpTitle(e.target.value)}
-                  placeholder="Es. Scheda forza base"
-                  className="mt-1 w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:bg-white focus:border-blue-500 font-bold text-slate-900"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 uppercase">
-                    Durata
-                  </label>
-                  <select
-                    value={cpDuration}
-                    onChange={(e) => setCpDuration(Number(e.target.value))}
-                    className="mt-1 w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 outline-none focus:bg-white focus:border-blue-500 font-bold text-slate-900"
-                  >
-                    {Array.from({ length: 52 }, (_, i) => i + 1).map((w) => (
-                      <option key={w} value={w}>
-                        {w} settimane
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 flex flex-col justify-center">
-                  <div className="text-[11px] font-bold text-slate-500 uppercase">Nota</div>
-                  <div className="text-sm font-bold text-slate-800">4 settimane = standard</div>
-                  <div className="text-xs text-slate-500">puoi sempre duplicare e modificare</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-5 border-t border-slate-100 flex gap-3">
-              <button
-                onClick={closeCreateProgram}
-                className="flex-1 h-12 rounded-xl border border-slate-200 font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                disabled={creatingProgram}
-              >
-                Annulla
-              </button>
-              <button
-                onClick={createProgram}
-                className="flex-1 h-12 rounded-xl bg-slate-900 text-white font-extrabold hover:bg-black transition disabled:opacity-50"
-                disabled={creatingProgram}
-              >
-                {creatingProgram ? "Creazione..." : "Crea scheda"}
-              </button>
-            </div>
-          </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-200">
+               <div className="flex justify-between items-center mb-6">
+                   <h2 className="text-xl font-black text-slate-800">Nuova Scheda</h2>
+                   <button onClick={() => setShowCreateProgram(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 text-slate-500"><X size={20}/></button>
+               </div>
+               <div className="space-y-4">
+                   <div>
+                       <label className="text-xs font-bold text-slate-500 uppercase">Nome Programma</label>
+                       <input autoFocus value={cpTitle} onChange={e => setCpTitle(e.target.value)} placeholder="Es. Ipertrofia" className="w-full mt-1 bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold text-lg outline-none focus:border-blue-500"/>
+                   </div>
+                   <div>
+                       <label className="text-xs font-bold text-slate-500 uppercase">Durata (Settimane)</label>
+                       <input type="number" value={cpDuration} onChange={e => setCpDuration(e.target.value)} className="w-full mt-1 bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold text-lg outline-none focus:border-blue-500"/>
+                   </div>
+                   <button onClick={createProgram} disabled={creatingProgram} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-200 disabled:opacity-50">{creatingProgram ? "Creazione..." : "Crea Scheda"}</button>
+               </div>
+           </div>
         </div>
       )}
     </div>
