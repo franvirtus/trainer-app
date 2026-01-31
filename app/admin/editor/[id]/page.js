@@ -19,10 +19,7 @@ export default function EditorPage({ params }) {
   const [program, setProgram] = useState(null);
   const [days, setDays] = useState([]); 
   const [activeDayIndex, setActiveDayIndex] = useState(0);
-  
-  // --- NUOVO: GESTIONE SETTIMANE ---
   const [activeWeek, setActiveWeek] = useState(1); 
-  
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -56,33 +53,55 @@ export default function EditorPage({ params }) {
     setLoading(false);
   };
 
-  // --- LOGICA OVERRIDE SETTIMANALE ---
-  // Questa funzione decide cosa mostrare: i dati base (W1) o i dati specifici della settimana (W2+)
+  // --- LOGICA OVERRIDE (ESERCIZI & NOTE GIORNO) ---
+  
   const getExerciseDisplayData = (ex) => {
-      // Se siamo in W1, usa i dati base
       if (activeWeek === 1) return ex;
-      
-      // Se siamo in W2+, controlla se c'è un override salvato in 'progression'
       const override = ex.progression?.[activeWeek];
-      
-      // Se c'è l'override usa quello, altrimenti usa i dati base
-      if (override) return { ...ex, ...override };
-      return ex;
+      return override ? { ...ex, ...override } : ex;
   };
 
-  // Quando modifichi un input
+  // Funzione per leggere la nota corretta in base alla settimana
+  const getDayNotes = (day) => {
+      // Se W1, ritorna la nota base
+      if (activeWeek === 1) return day.notes || '';
+      
+      // Se W>1, cerca override. Se non c'è, usa la nota base (ereditarietà)
+      // Supporta sia chiave numerica che stringa per sicurezza
+      const p = day.progression || {};
+      const wOverride = p[activeWeek] || p[String(activeWeek)];
+      
+      return wOverride?.notes ?? day.notes ?? '';
+  };
+
+  // Funzione per salvare la nota nella settimana corretta
+  const updateDayNotes = (val) => {
+    const newDays = [...days];
+    const day = newDays[activeDayIndex];
+
+    if (activeWeek === 1) {
+        // Modifica BASE (W1) -> Si propaga a tutte le settimane senza override
+        day.notes = val;
+    } else {
+        // Modifica OVERRIDE (W2+)
+        if (!day.progression) day.progression = {};
+        // Inizializza l'oggetto per la settimana se non esiste
+        if (!day.progression[activeWeek]) day.progression[activeWeek] = {};
+        
+        day.progression[activeWeek].notes = val;
+    }
+    setDays(newDays);
+  };
+
   const updateExercise = (exIndex, field, value) => {
     const newDays = [...days];
     const exercise = newDays[activeDayIndex].exercises[exIndex];
 
     if (activeWeek === 1) {
-        // Se siamo in W1, modifichiamo il valore base (che vale per tutte le settimane se non sovrascritto)
         exercise[field] = value;
     } else {
-        // Se siamo in W2+, salviamo la modifica dentro l'oggetto 'progression'
         if (!exercise.progression) exercise.progression = {};
         if (!exercise.progression[activeWeek]) {
-            // Se è la prima modifica per questa settimana, copiamo i valori attuali come base
             exercise.progression[activeWeek] = {
                 sets: exercise.sets,
                 reps: exercise.reps,
@@ -91,13 +110,12 @@ export default function EditorPage({ params }) {
                 notes: exercise.notes
             };
         }
-        // Aggiorna solo il campo specifico per questa settimana
         exercise.progression[activeWeek][field] = value;
     }
     setDays(newDays);
   };
 
-  // --- AZIONI GIORNI ---
+  // --- AZIONI STANDARD ---
   const addDay = () => {
     const newDayLabel = String.fromCharCode(65 + days.length); 
     const newDay = { id: `day-${Date.now()}`, name: `Giorno ${newDayLabel}`, notes: '', exercises: [] };
@@ -110,11 +128,6 @@ export default function EditorPage({ params }) {
     if(newDays[activeDayIndex]) { newDays[activeDayIndex].name = val; setDays(newDays); }
   };
 
-  const updateDayNotes = (val) => {
-    const newDays = [...days];
-    if(newDays[activeDayIndex]) { newDays[activeDayIndex].notes = val; setDays(newDays); }
-  };
-
   const deleteDay = () => {
     if (days.length <= 1) return alert("Devi avere almeno un giorno.");
     if (!confirm("Eliminare questo giorno?")) return;
@@ -123,11 +136,9 @@ export default function EditorPage({ params }) {
     setActiveDayIndex(0);
   };
 
-  // --- AZIONI ESERCIZI ---
   const addExercise = () => {
     const newDays = [...days];
     if(newDays[activeDayIndex]) {
-        // Creiamo un esercizio vuoto
         newDays[activeDayIndex].exercises.push({
             id: `ex-${Date.now()}`, name: "", sets: "3", reps: "10", load: "", rest: "90\"", notes: ""
         });
@@ -179,7 +190,7 @@ export default function EditorPage({ params }) {
             <button onClick={saveProgram} disabled={saving} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-black transition shadow-lg disabled:opacity-50"><Save size={18}/> {saving ? "..." : "SALVA"}</button>
         </div>
 
-        {/* SETTIMANE TOGGLE (W1, W2...) */}
+        {/* SETTIMANE TOGGLE */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
             {Array.from({ length: program?.duration || 4 }).map((_, i) => {
                 const w = i + 1;
@@ -202,7 +213,7 @@ export default function EditorPage({ params }) {
 
       <div className="max-w-4xl mx-auto p-6 space-y-6">
         
-        {/* DAY TABS (Giorno A, Giorno B...) */}
+        {/* DAY TABS */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2">
           {days.map((day, idx) => (
             <button key={day.id} onClick={() => setActiveDayIndex(idx)} className={`px-5 py-2 rounded-xl font-bold text-sm whitespace-nowrap transition border ${idx === activeDayIndex ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"}`}>{day.name}</button>
@@ -224,13 +235,22 @@ export default function EditorPage({ params }) {
                 </div>
             </div>
 
-            {/* Note Giorno */}
-            <div className="px-5 pt-5">
+            {/* Note Giorno (CON GESTIONE SETTIMANE) */}
+            <div className="px-5 pt-5 relative">
+                {activeWeek > 1 && (
+                    <div className="absolute top-5 right-5 text-[9px] font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded border border-amber-200 z-10">NOTA W{activeWeek}</div>
+                )}
                 <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex gap-3">
                     <div className="mt-1 text-amber-400"><Info size={18}/></div>
                     <div className="flex-1">
                         <label className="block text-[10px] font-bold text-amber-700 uppercase mb-1">Note per la giornata</label>
-                        <textarea value={activeDay.notes || ''} onChange={(e) => updateDayNotes(e.target.value)} placeholder="Es. Focus tempo sotto tensione..." className="w-full bg-transparent outline-none text-sm text-amber-900 placeholder:text-amber-400/70 font-medium resize-none h-auto min-h-[40px]" rows={2}/>
+                        <textarea 
+                            value={getDayNotes(activeDay)} 
+                            onChange={(e) => updateDayNotes(e.target.value)} 
+                            placeholder="Es. Focus tempo sotto tensione..." 
+                            className="w-full bg-transparent outline-none text-sm text-amber-900 placeholder:text-amber-400/70 font-medium resize-none h-auto min-h-[40px]" 
+                            rows={2}
+                        />
                     </div>
                 </div>
             </div>
@@ -244,13 +264,10 @@ export default function EditorPage({ params }) {
                     </div>
                 ) : (
                     activeDay.exercises.map((ex, idx) => {
-                        // QUI È LA MAGIA: Prendiamo i dati della settimana attiva
                         const data = getExerciseDisplayData(ex);
-                        
                         return (
                             <div key={ex.id || idx} className={`group relative bg-white border rounded-2xl p-4 shadow-sm hover:border-blue-400 transition-all ${activeWeek > 1 ? "border-blue-100 bg-blue-50/20" : "border-slate-200"}`}>
                                 
-                                {/* Etichetta se stiamo modificando una settimana specifica */}
                                 {activeWeek > 1 && (
                                     <div className="absolute top-2 right-2 text-[9px] font-bold text-blue-500 bg-blue-100 px-2 py-0.5 rounded">MODIFICA W{activeWeek}</div>
                                 )}
@@ -260,8 +277,6 @@ export default function EditorPage({ params }) {
                                     <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Esercizio</label><input value={data.name} onChange={(e) => updateExercise(idx, 'name', e.target.value)} className="w-full text-lg font-bold text-slate-900 outline-none placeholder:text-slate-300" placeholder="Nome Esercizio"/></div>
                                     <button onClick={() => deleteExercise(idx)} className="text-slate-200 hover:text-red-500 transition"><Trash2 size={18}/></button>
                                 </div>
-                                
-                                {/* Campi Modificabili */}
                                 <div className="grid grid-cols-4 gap-2 mb-4">
                                     <div className="bg-slate-50 rounded-lg p-2 border border-slate-100"><label className="block text-[9px] font-bold text-slate-400 uppercase text-center mb-1">Serie</label><input value={data.sets} onChange={(e) => updateExercise(idx, 'sets', e.target.value)} className="w-full text-center font-bold text-slate-700 bg-transparent outline-none" /></div>
                                     <div className="bg-slate-50 rounded-lg p-2 border border-slate-100"><label className="block text-[9px] font-bold text-slate-400 uppercase text-center mb-1">Reps</label><input value={data.reps} onChange={(e) => updateExercise(idx, 'reps', e.target.value)} className="w-full text-center font-bold text-slate-700 bg-transparent outline-none" /></div>
