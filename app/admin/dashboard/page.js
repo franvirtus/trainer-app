@@ -230,136 +230,128 @@ export default function AdminDashboard() {
 
       {/* MODAL CREA ATLETA */}
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/40"
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             onClick={closeCreate}
             aria-hidden="true"
           />
-          <div className="relative w-[92vw] max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="p-5 border-b border-slate-200 flex items-start justify-between">
+          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div>
-                <div className="text-lg font-bold text-slate-900">Nuovo atleta</div>
-                <div className="text-sm text-slate-500">Inserisci i dati base.</div>
+                <div className="text-xl font-black text-slate-900">Nuovo atleta</div>
+                <div className="text-sm text-slate-500 font-medium">Inserisci i dati base.</div>
               </div>
               <button
                 onClick={closeCreate}
-                className="p-2 rounded-lg hover:bg-slate-100 text-slate-500"
+                className="p-2 rounded-full hover:bg-slate-100 text-slate-500 transition"
                 aria-label="Chiudi"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="p-6 space-y-5">
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
                   Nome e cognome *
                 </label>
                 <input
                   value={form.full_name}
                   onChange={(e) => onChange("full_name", e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500"
+                  className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 outline-none focus:bg-white focus:border-blue-500 transition font-bold text-slate-800"
                   placeholder="Es. Mario Rossi"
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Sesso</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Sesso</label>
                   <select
                     value={form.gender}
                     onChange={(e) => onChange("gender", e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500 bg-white"
+                    className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 outline-none focus:bg-white focus:border-blue-500 transition font-medium text-slate-700 appearance-none"
                   >
                     <option value="F">Femmina</option>
                     <option value="M">Maschio</option>
                   </select>
                 </div>
-
-                <div className="border border-slate-200 rounded-xl bg-slate-50 flex items-center justify-center p-3">
-                  <img
-                    src={form.gender === "M" ? "/body-male.png" : "/body-female.png"}
-                    alt="Sagoma"
-                    className="h-24 object-contain opacity-90"
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Data di nascita</label>
+                  <input
+                    type="date"
+                    value={form.birth_date}
+                    onChange={(e) => onChange("birth_date", e.target.value)}
+                    className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 outline-none focus:bg-white focus:border-blue-500 transition font-medium text-slate-700"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Email</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email</label>
                   <input
                     value={form.email}
                     onChange={(e) => onChange("email", e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500"
+                    className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 outline-none focus:bg-white focus:border-blue-500 transition font-medium text-slate-700"
                     placeholder="mario@email.it"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Telefono</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Telefono</label>
                   <input
                     value={form.phone}
                     onChange={(e) => onChange("phone", e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500"
+                    className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 outline-none focus:bg-white focus:border-blue-500 transition font-medium text-slate-700"
                     placeholder="+39..."
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Data di nascita</label>
-                  <input
-                    type="date"
-                    value={form.birth_date}
-                    onChange={(e) => onChange("birth_date", e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Altezza (cm)</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Altezza (cm)</label>
                   <input
                     inputMode="numeric"
                     value={form.height_cm}
                     onChange={(e) => onChange("height_cm", e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500"
+                    className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 outline-none focus:bg-white focus:border-blue-500 transition font-medium text-slate-700"
                     placeholder="180"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Peso attuale (kg)</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Peso attuale (kg)</label>
                   <input
                     inputMode="decimal"
                     value={form.current_weight_kg}
                     onChange={(e) => onChange("current_weight_kg", e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500"
+                    className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 outline-none focus:bg-white focus:border-blue-500 transition font-medium text-slate-700"
                     placeholder="82.5"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">Obiettivo</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Obiettivo</label>
                 <input
                   value={form.goal}
                   onChange={(e) => onChange("goal", e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500"
+                  className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 outline-none focus:bg-white focus:border-blue-500 transition font-medium text-slate-700"
                   placeholder="Es. Dimagrimento / Forza / Massa..."
                 />
               </div>
             </div>
 
-            <div className="p-5 border-t border-slate-200 flex gap-3 justify-end">
+            <div className="p-6 border-t border-slate-100 flex gap-3 bg-slate-50/50">
               <button
                 onClick={closeCreate}
-                className="px-5 py-3 rounded-xl border border-slate-200 font-bold text-slate-700 hover:bg-slate-50"
+                className="flex-1 px-5 py-3 rounded-xl border border-slate-200 font-bold text-slate-600 hover:bg-white hover:border-slate-300 transition"
               >
                 Annulla
               </button>
               <button
                 onClick={createAthlete}
-                className="px-6 py-3 rounded-xl bg-slate-900 text-white font-bold hover:bg-black transition"
+                className="flex-1 px-6 py-3 rounded-xl bg-slate-900 text-white font-bold hover:bg-black transition shadow-lg shadow-slate-300"
               >
                 Crea atleta
               </button>
