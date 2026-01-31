@@ -38,13 +38,11 @@ export default function LivePage({ params }) {
     if (error || !prog) { alert("Scheda non trovata"); setLoading(false); return; }
     setProgram(prog);
     
-    // FETCH NOME ATLETA
     if (prog.client_id) {
       const { data: client } = await supabase.from("clients").select("full_name").eq("id", prog.client_id).single();
       if (client) setClientName(client.full_name); 
     }
 
-    // LOGS SETTIMANA CORRENTE
     const { data: savedLogs } = await supabase.from("workout_logs")
       .select("*").eq("program_id", id).eq("week_number", activeWeek);
 
@@ -57,7 +55,6 @@ export default function LivePage({ params }) {
     }
     setLogs(logsMap);
 
-    // LOGS SETTIMANA PRECEDENTE (STORICO)
     if (activeWeek > 1) {
         const { data: prevLogs } = await supabase.from("workout_logs")
             .select("*").eq("program_id", id).eq("week_number", activeWeek - 1);
@@ -77,10 +74,21 @@ export default function LivePage({ params }) {
     setLoading(false);
   };
 
+  // --- GETTERS ROBUSTI (ESERCIZI & NOTE GIORNO) ---
+  
   const getExerciseDisplay = (ex) => {
       if (activeWeek === 1 || !ex.progression) return ex;
       const override = ex.progression[activeWeek] || ex.progression[String(activeWeek)];
       return override ? { ...ex, ...override } : ex;
+  };
+
+  // NUOVA FUNZIONE: Legge la nota corretta per la settimana
+  const getDayNotesDisplay = (day) => {
+      if (activeWeek === 1) return day.notes;
+      // Cerca override (supporta chiave stringa o numero)
+      const override = day.progression?.[activeWeek] || day.progression?.[String(activeWeek)];
+      // Se c'è una nota specifica la usa, altrimenti usa quella base (ereditarietà)
+      return override?.notes ?? day.notes; 
   };
 
   const parseSetData = (repsString, weightString) => {
@@ -148,24 +156,21 @@ export default function LivePage({ params }) {
 
   const days = program.days_structure || [];
   const activeDay = days[activeDayIndex];
+  
+  // Calcolo la nota corretta da visualizzare
+  const activeDayNotes = getDayNotesDisplay(activeDay);
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-32">
       
-      {/* HEADER PULITO */}
+      {/* HEADER */}
       <div className="bg-slate-800/90 backdrop-blur sticky top-0 z-20 border-b border-slate-700 shadow-xl pt-6">
         <div className="px-4 max-w-md mx-auto">
           <div className="flex justify-between items-end mb-5">
             <div>
-              {/* ETICHETTA PROGRAMMA */}
-              <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1 flex items-center gap-1">
-                 PROGRAMMA
-              </div>
-              {/* TITOLO SCHEDA (Es. "Ret" o "Ipertrofia") */}
+              <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1 flex items-center gap-1">PROGRAMMA</div>
               <h1 className="text-3xl font-black text-white leading-none capitalize tracking-tight">{program.title}</h1>
             </div>
-            
-            {/* NOME ATLETA */}
             {clientName && (
               <div className="text-right pl-4">
                 <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">ATLETA</div>
@@ -174,7 +179,6 @@ export default function LivePage({ params }) {
             )}
           </div>
 
-          {/* BARRA SETTIMANE */}
           <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar">
             {Array.from({ length: program.duration || 4 }, (_, i) => i + 1).map((week) => (
               <button key={week} onClick={() => setActiveWeek(week)} className={`min-w-[45px] h-[45px] rounded-xl flex flex-col items-center justify-center border transition-all ${activeWeek === week ? "bg-blue-600 border-blue-500 text-white shadow-lg scale-105" : "bg-slate-800 border-slate-700 text-slate-400"}`}>
@@ -183,7 +187,6 @@ export default function LivePage({ params }) {
             ))}
           </div>
 
-          {/* BARRA GIORNI */}
           <div className="flex border-b border-slate-700 overflow-x-auto no-scrollbar">
             {days.map((day, idx) => (
               <button key={idx} onClick={() => setActiveDayIndex(idx)} className={`flex-1 py-3 px-4 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeDayIndex === idx ? "border-blue-500 text-white" : "border-transparent text-slate-500"}`}>{day.name}</button>
@@ -193,11 +196,19 @@ export default function LivePage({ params }) {
       </div>
 
       <div className="max-w-md mx-auto p-4 space-y-4">
-        {/* INFO SCHEDA & GIORNO */}
         {program.notes && <div className="bg-blue-900/20 border border-blue-800/50 p-4 rounded-xl text-sm text-blue-100 flex gap-2"><Info size={16} className="shrink-0 mt-0.5" /><div><span className="font-bold text-blue-400 uppercase text-[10px] block">Obiettivo:</span>{program.notes}</div></div>}
-        {activeDay?.notes && <div className="bg-amber-900/20 border border-amber-800/50 p-3 rounded-xl text-sm text-amber-100 flex gap-2"><FileText size={16} className="shrink-0 mt-0.5 text-amber-500" /><div><span className="font-bold text-amber-500 uppercase text-[10px] block">Note del Giorno:</span>{activeDay.notes}</div></div>}
+        
+        {/* NOTE GIORNO (DINAMICHE) */}
+        {activeDayNotes && (
+            <div className="bg-amber-900/20 border border-amber-800/50 p-3 rounded-xl text-sm text-amber-100 flex gap-2">
+                <FileText size={16} className="shrink-0 mt-0.5 text-amber-500" />
+                <div>
+                    {activeWeek > 1 && <span className="font-bold text-amber-500 uppercase text-[9px] block mb-1">Nota W{activeWeek}:</span>}
+                    {activeDayNotes}
+                </div>
+            </div>
+        )}
 
-        {/* LISTA ESERCIZI */}
         {(!activeDay || !activeDay.exercises || activeDay.exercises.length === 0) ? (
             <div className="text-center py-10 text-slate-500">Nessun esercizio.</div>
         ) : (
@@ -208,8 +219,6 @@ export default function LivePage({ params }) {
                 const historyData = historyLogs[key];
                 const isDone = !!logData;
                 const isEditing = editingKey === key;
-
-                // Badge "Update" se ci sono modifiche specifiche per la settimana
                 const isModified = rawEx.progression && (rawEx.progression[activeWeek] || rawEx.progression[String(activeWeek)]);
 
                 return (
