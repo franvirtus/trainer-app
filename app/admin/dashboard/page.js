@@ -352,3 +352,18 @@ export default function AdminDashboard() {
                 onClick={closeCreate}
                 className="flex-1 px-5 py-3 rounded-xl border border-slate-200 font-bold text-slate-600 hover:bg-white hover:border-slate-300 transition"
               >
+                Annulla
+              </button>
+              <button
+                onClick={createAthlete}
+                className="flex-1 px-6 py-3 rounded-xl bg-slate-900 text-white font-bold hover:bg-black transition shadow-lg shadow-slate-300 flex justify-center items-center gap-2"
+              >
+                <Plus size={18} /> Crea Atleta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
