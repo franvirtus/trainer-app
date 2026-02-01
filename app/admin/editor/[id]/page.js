@@ -67,57 +67,54 @@ export default function EditorPage({ params }) {
       return wOverride?.notes ?? day.notes ?? '';
   };
 
-  // --- UPDATE FUNCTIONS (STILE IMPERATIVO - PIÙ SICURO PER INPUT) ---
+  // --- UPDATE FUNCTIONS ---
   
   const updateDayName = (val) => {
-    const newDays = [...days];
-    // Modifica diretta dell'oggetto (più reattiva per input text veloce)
-    newDays[activeDayIndex] = { ...newDays[activeDayIndex], name: val };
-    setDays(newDays);
+    setDays(prevDays => prevDays.map((day, i) => 
+        i === activeDayIndex ? { ...day, name: val } : day
+    ));
   };
 
   const updateDayNotes = (val) => {
-    const newDays = [...days];
-    const dayIndex = activeDayIndex; // Capture index
-    const day = { ...newDays[dayIndex] }; // Shallow copy day
-
-    if (activeWeek === 1) {
-        day.notes = val;
-    } else {
-        if (!day.progression) day.progression = {};
-        // Clone progression object to trigger React update
-        day.progression = { ...day.progression };
-        if (!day.progression[activeWeek]) day.progression[activeWeek] = {};
-        day.progression[activeWeek] = { ...day.progression[activeWeek], notes: val };
-    }
-    newDays[dayIndex] = day;
-    setDays(newDays);
+    setDays(prevDays => prevDays.map((day, i) => {
+        if (i !== activeDayIndex) return day;
+        
+        const updatedDay = { ...day };
+        if (activeWeek === 1) {
+            updatedDay.notes = val;
+        } else {
+            updatedDay.progression = { ...updatedDay.progression };
+            if (!updatedDay.progression[activeWeek]) updatedDay.progression[activeWeek] = {};
+            updatedDay.progression[activeWeek] = { ...updatedDay.progression[activeWeek], notes: val };
+        }
+        return updatedDay;
+    }));
   };
 
   const updateExercise = (exIndex, field, value) => {
-    const newDays = [...days];
-    const day = { ...newDays[activeDayIndex] };
-    const exercises = [...day.exercises];
-    const exercise = { ...exercises[exIndex] };
+    setDays(prevDays => prevDays.map((day, dIdx) => {
+        if (dIdx !== activeDayIndex) return day;
 
-    if (activeWeek === 1) {
-        exercise[field] = value;
-    } else {
-        if (!exercise.progression) exercise.progression = {};
-        exercise.progression = { ...exercise.progression }; // Clone
-        
-        if (!exercise.progression[activeWeek]) {
-            exercise.progression[activeWeek] = {
-                sets: exercise.sets, reps: exercise.reps, load: exercise.load, rest: exercise.rest, notes: exercise.notes
-            };
-        }
-        exercise.progression[activeWeek] = { ...exercise.progression[activeWeek], [field]: value };
-    }
+        const updatedExercises = day.exercises.map((ex, eIdx) => {
+            if (eIdx !== exIndex) return ex;
 
-    exercises[exIndex] = exercise;
-    day.exercises = exercises;
-    newDays[activeDayIndex] = day;
-    setDays(newDays);
+            const updatedEx = { ...ex };
+            if (activeWeek === 1) {
+                updatedEx[field] = value;
+            } else {
+                updatedEx.progression = { ...updatedEx.progression };
+                if (!updatedEx.progression[activeWeek]) {
+                    updatedEx.progression[activeWeek] = {
+                        sets: updatedEx.sets, reps: updatedEx.reps, load: updatedEx.load, rest: updatedEx.rest, notes: updatedEx.notes
+                    };
+                }
+                updatedEx.progression[activeWeek] = { ...updatedEx.progression[activeWeek], [field]: value };
+            }
+            return updatedEx;
+        });
+
+        return { ...day, exercises: updatedExercises };
+    }));
   };
 
   // --- AZIONI ---
@@ -137,22 +134,25 @@ export default function EditorPage({ params }) {
   };
 
   const addExercise = () => {
-    const newDays = [...days];
-    // Assicuriamoci di clonare l'array degli esercizi
-    const exercises = [...newDays[activeDayIndex].exercises];
-    exercises.push({
-        id: `ex-${Date.now()}`, name: "", sets: "3", reps: "10", load: "", rest: "90\"", notes: ""
-    });
-    newDays[activeDayIndex] = { ...newDays[activeDayIndex], exercises };
-    setDays(newDays);
+    setDays(prevDays => prevDays.map((day, i) => {
+        if (i !== activeDayIndex) return day;
+        return {
+            ...day,
+            exercises: [...day.exercises, {
+                id: `ex-${Date.now()}`, name: "", sets: "3", reps: "10", load: "", rest: "90\"", notes: ""
+            }]
+        };
+    }));
   };
 
   const deleteExercise = (exIndex) => {
-    const newDays = [...days];
-    const exercises = [...newDays[activeDayIndex].exercises];
-    exercises.splice(exIndex, 1);
-    newDays[activeDayIndex] = { ...newDays[activeDayIndex], exercises };
-    setDays(newDays);
+    setDays(prevDays => prevDays.map((day, i) => {
+        if (i !== activeDayIndex) return day;
+        return {
+            ...day,
+            exercises: day.exercises.filter((_, idx) => idx !== exIndex)
+        };
+    }));
   };
 
   const saveProgram = async () => {
@@ -171,6 +171,7 @@ export default function EditorPage({ params }) {
   return (
     <div className="min-h-screen bg-slate-50 font-sans pb-20">
       
+      {/* HEADER */}
       <div className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-30 shadow-sm flex flex-col gap-4">
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -195,6 +196,7 @@ export default function EditorPage({ params }) {
 
       <div className="max-w-4xl mx-auto p-6 space-y-6">
         
+        {/* DAY TABS */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2">
           {days.map((day, idx) => (
             <button key={day.id} onClick={() => setActiveDayIndex(idx)} className={`px-5 py-2 rounded-xl font-bold text-sm whitespace-nowrap transition border ${idx === activeDayIndex ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"}`}>{day.name}</button>
@@ -202,18 +204,18 @@ export default function EditorPage({ params }) {
           <button onClick={addDay} className="p-2 bg-slate-200 rounded-xl hover:bg-slate-300 text-slate-600 transition"><Plus size={18}/></button>
         </div>
 
+        {/* CARD GIORNO ATTIVO */}
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             
+            {/* Header Giorno - PULITO (Senza quadratino lettera) */}
             <div className="bg-slate-50 border-b border-slate-200 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-3 flex-1">
-                    <div className="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center font-bold text-slate-400">{String.fromCharCode(65 + activeDayIndex)}</div>
-                    
-                    {/* INPUT NOME GIORNO */}
+                <div className="flex-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Nome Giornata</label>
                     <input 
                         value={activeDay.name || ''} 
                         onChange={(e) => updateDayName(e.target.value)} 
-                        className="bg-transparent font-black text-xl text-slate-800 outline-none w-full placeholder:text-slate-300" 
-                        placeholder="Nome Giorno"
+                        className="bg-transparent font-black text-2xl text-slate-800 outline-none w-full placeholder:text-slate-300" 
+                        placeholder="Es. Giorno A"
                     />
                 </div>
                 <div className="flex items-center gap-2">
@@ -221,6 +223,7 @@ export default function EditorPage({ params }) {
                 </div>
             </div>
 
+            {/* Note Giorno */}
             <div className="px-5 pt-5 relative">
                 {activeWeek > 1 && (<div className="absolute top-5 right-5 text-[9px] font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded border border-amber-200 z-10">NOTA W{activeWeek}</div>)}
                 <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex gap-3">
@@ -232,6 +235,7 @@ export default function EditorPage({ params }) {
                 </div>
             </div>
 
+            {/* Esercizi */}
             <div className="p-5 space-y-4">
                 {(!activeDay.exercises || activeDay.exercises.length === 0) ? (
                     <div className="text-center py-10 border-2 border-dashed border-slate-100 rounded-xl text-slate-400"><Dumbbell size={32} className="mx-auto mb-2 opacity-20"/><p className="text-sm font-medium">Nessun esercizio.</p></div>
