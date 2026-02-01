@@ -1,11 +1,11 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Save, Plus, Trash2, Copy, GripVertical, Settings, Info, FileText, Dumbbell, Edit2
+  ArrowLeft, Save, Plus, Trash2, Copy, GripVertical, Info, FileText, Dumbbell, Edit2
 } from "lucide-react";
 
 export default function EditorPage({ params }) {
@@ -22,11 +22,21 @@ export default function EditorPage({ params }) {
   const [activeWeek, setActiveWeek] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  
+  // Stato per gestire l'editing del nome del giorno inline
+  const [editingDayId, setEditingDayId] = useState(null);
+  const editInputRef = useRef(null);
 
   useEffect(() => {
     fetchProgram();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    if (editingDayId && editInputRef.current) {
+      editInputRef.current.focus();
+    }
+  }, [editingDayId]);
 
   const fetchProgram = async () => {
     setLoading(true);
@@ -69,10 +79,14 @@ export default function EditorPage({ params }) {
 
   // --- UPDATE FUNCTIONS ---
   
-  const updateDayName = (val) => {
+  const updateDayName = (index, val) => {
     setDays(prevDays => prevDays.map((day, i) => 
-        i === activeDayIndex ? { ...day, name: val } : day
+        i === index ? { ...day, name: val } : day
     ));
+  };
+
+  const finishEditingDay = () => {
+    setEditingDayId(null);
   };
 
   const updateDayNotes = (val) => {
@@ -196,36 +210,59 @@ export default function EditorPage({ params }) {
 
       <div className="max-w-4xl mx-auto p-6 space-y-6">
         
-        {/* DAY TABS */}
+        {/* DAY TABS (EDITABILI AL CLICK) */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2">
-          {days.map((day, idx) => (
-            <button key={day.id} onClick={() => setActiveDayIndex(idx)} className={`px-5 py-2 rounded-xl font-bold text-sm whitespace-nowrap transition border ${idx === activeDayIndex ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"}`}>{day.name}</button>
-          ))}
-          <button onClick={addDay} className="p-2 bg-slate-200 rounded-xl hover:bg-slate-300 text-slate-600 transition"><Plus size={18}/></button>
+          {days.map((day, idx) => {
+            const isActive = idx === activeDayIndex;
+            const isEditing = editingDayId === day.id;
+
+            return (
+                <div 
+                    key={day.id}
+                    className={`relative flex items-center px-4 py-2.5 rounded-xl border transition-all cursor-pointer ${isActive ? "bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-200" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"}`}
+                    onClick={() => !isEditing && setActiveDayIndex(idx)}
+                >
+                    {isEditing ? (
+                        <input
+                            ref={editInputRef}
+                            value={day.name}
+                            onChange={(e) => updateDayName(idx, e.target.value)}
+                            onBlur={finishEditingDay}
+                            onKeyDown={(e) => e.key === "Enter" && finishEditingDay()}
+                            className="bg-transparent text-sm font-bold outline-none text-white w-24"
+                        />
+                    ) : (
+                        <span className="font-bold text-sm whitespace-nowrap">{day.name}</span>
+                    )}
+
+                    {/* Matita visible solo se attivo e non in edit */}
+                    {isActive && !isEditing && (
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingDayId(day.id);
+                            }} 
+                            className="ml-2 p-1 text-blue-200 hover:text-white rounded-full hover:bg-blue-500/50 transition"
+                        >
+                            <Edit2 size={12}/>
+                        </button>
+                    )}
+                </div>
+            );
+          })}
+          <button onClick={addDay} className="p-2.5 bg-slate-200 rounded-xl hover:bg-slate-300 text-slate-600 transition"><Plus size={18}/></button>
         </div>
 
-        {/* CARD GIORNO ATTIVO */}
+        {/* CARD GIORNO ATTIVO (SENZA TITOLO DUPLICATO) */}
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             
-            {/* HEADER GIORNO: Stile Titolo + Matita */}
-            <div className="bg-slate-50 border-b border-slate-200 p-5 flex items-center justify-between gap-4">
-                <div className="flex-1 group relative">
-                    {/* Input mascherato da Titolo */}
-                    <input 
-                        value={activeDay.name || ''} 
-                        onChange={(e) => updateDayName(e.target.value)} 
-                        className="bg-transparent font-black text-3xl text-slate-800 outline-none w-full placeholder:text-slate-300 border-b border-transparent focus:border-slate-300 transition-all pb-1"
-                        placeholder="Nome Giorno"
-                    />
-                    {/* Icona matita decorativa che suggerisce l'edit */}
-                    <div className="absolute top-2 right-0 text-slate-300 pointer-events-none group-hover:text-blue-400 transition-colors">
-                        <Edit2 size={18} />
-                    </div>
+            {/* Solo barra controlli (Delete, Copy) */}
+            <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 flex justify-between items-center">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                    {activeWeek === 1 ? "Programma Base (W1)" : `Modifica Settimana ${activeWeek}`}
                 </div>
                 <div className="flex items-center gap-2">
-                    <button className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 flex items-center gap-1 hover:bg-blue-100 transition">
-                        <Copy size={14}/> Copia W1 su tutte
-                    </button>
+                    <button className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 flex items-center gap-1 hover:bg-blue-100 transition"><Copy size={14}/> Copia W1 su tutte</button>
                     <button onClick={deleteDay} className="text-slate-400 hover:text-red-500 p-2 transition"><Trash2 size={18}/></button>
                 </div>
             </div>
