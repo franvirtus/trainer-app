@@ -20,9 +20,7 @@ export default function EditorPage({ params }) {
   const [days, setDays] = useState([]); 
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [activeWeek, setActiveWeek] = useState(1);
-  
-  // NUOVO: Gestione Durata
-  const [duration, setDuration] = useState(4);
+  const [duration, setDuration] = useState(4); // Stato durata
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -52,7 +50,7 @@ export default function EditorPage({ params }) {
     }
 
     setProgram(data);
-    setDuration(data.duration || 4); // Inizializza stato durata
+    setDuration(data.duration || 4);
 
     if (data.days_structure && Array.isArray(data.days_structure) && data.days_structure.length > 0) {
       const sanitizedDays = data.days_structure.map(d => ({
@@ -67,10 +65,7 @@ export default function EditorPage({ params }) {
     setLoading(false);
   };
 
-  // ... (LE ALTRE FUNZIONI INVARIATE: getExerciseDisplayData, getDayNotes, updateDayName...) ...
-  // PER BREVITÀ QUI LE RIASSUMO, MA NEL FILE DEVI AVERLE TUTTE.
-  // COPIA INCOLLA IL CODICE SOTTOSTANTE CHE È COMPLETO.
-
+  // --- LOGICHE (INVARIATE) ---
   const getExerciseDisplayData = (ex) => {
       if (activeWeek === 1) return ex;
       const override = ex.progression?.[activeWeek];
@@ -153,15 +148,23 @@ export default function EditorPage({ params }) {
     }));
   };
 
+  // --- NUOVA FUNZIONE AGGIUNGI SETTIMANA ---
+  const addWeek = async () => {
+      const newDuration = Number(duration) + 1;
+      setDuration(newDuration);
+      // Salva subito nel DB per persistenza immediata
+      await supabase.from("programs").update({ duration: newDuration }).eq("id", id);
+      // Sposta subito la vista sulla nuova settimana
+      setActiveWeek(newDuration);
+  };
+
   const saveProgram = async () => {
     setSaving(true);
-    // AGGIORNATO: Salva anche la durata!
     const { error } = await supabase.from("programs").update({ 
         days_structure: days, 
-        duration: Number(duration), // SALVA DURATA
+        duration: Number(duration),
         updated_at: new Date() 
     }).eq("id", id);
-    
     setSaving(false);
     if (error) alert("Errore: " + error.message);
     else alert("Salvato!");
@@ -175,41 +178,50 @@ export default function EditorPage({ params }) {
   return (
     <div className="min-h-screen bg-slate-50 font-sans pb-20">
       
+      {/* HEADER */}
       <div className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-30 shadow-sm flex flex-col gap-4">
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
                 <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition"><ArrowLeft size={22}/></button>
                 <div>
                     <h1 className="text-xl font-black text-slate-900">{program?.title || "Scheda"}</h1>
-                    {/* INPUT DURATA MODIFICABILE */}
-                    <div className="flex items-center gap-1 text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                        <Clock size={12}/>
-                        <input 
-                            type="number" 
-                            value={duration} 
-                            onChange={(e) => setDuration(e.target.value)}
-                            className="w-8 bg-transparent text-center border-b border-slate-300 focus:border-blue-500 outline-none text-slate-600 font-bold"
-                        />
-                        SETTIMANE
+                    <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5 flex items-center gap-1">
+                        <Clock size={12}/> {duration} SETTIMANE
                     </div>
                 </div>
             </div>
             <button onClick={saveProgram} disabled={saving} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-black transition shadow-lg disabled:opacity-50"><Save size={18}/> {saving ? "..." : "SALVA"}</button>
         </div>
 
-        {/* SETTIMANE TOGGLE (Generato dinamicamente in base alla durata!) */}
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+        {/* SETTIMANE TOGGLE CON TASTO PIÙ */}
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 items-center">
             {Array.from({ length: Number(duration) || 4 }).map((_, i) => {
                 const w = i + 1;
                 return (
-                    <button key={w} onClick={() => setActiveWeek(w)} className={`flex-shrink-0 w-10 h-10 rounded-xl font-bold text-sm flex items-center justify-center transition border ${activeWeek === w ? "bg-slate-900 text-white border-slate-900 shadow-md scale-105" : "bg-white text-slate-500 border-slate-200 hover:border-slate-400"}`}>W{w}</button>
+                    <button 
+                        key={w} 
+                        onClick={() => setActiveWeek(w)} 
+                        className={`flex-shrink-0 w-10 h-10 rounded-xl font-bold text-sm flex items-center justify-center transition border ${activeWeek === w ? "bg-slate-900 text-white border-slate-900 shadow-md scale-105" : "bg-white text-slate-500 border-slate-200 hover:border-slate-400"}`}
+                    >
+                        W{w}
+                    </button>
                 );
             })}
+            
+            {/* TASTO AGGIUNGI SETTIMANA */}
+            <button 
+                onClick={addWeek}
+                className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border-2 border-dashed border-slate-300 text-slate-400 hover:bg-slate-50 hover:text-blue-600 hover:border-blue-400 transition"
+                title="Aggiungi Settimana"
+            >
+                <Plus size={18} />
+            </button>
         </div>
       </div>
 
-      {/* ... (IL RESTO DEL BODY È IDENTICO ALL'ULTIMA VERSIONE FUNZIONANTE) ... */}
       <div className="max-w-4xl mx-auto p-6 space-y-6">
+        
+        {/* DAY TABS */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2">
           {days.map((day, idx) => {
             const isActive = idx === activeDayIndex;
@@ -239,6 +251,7 @@ export default function EditorPage({ params }) {
           <button onClick={addDay} className="p-2.5 bg-slate-200 rounded-xl hover:bg-slate-300 text-slate-600 transition"><Plus size={18}/></button>
         </div>
 
+        {/* CARD GIORNO */}
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 flex justify-between items-center">
                 <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">{activeWeek === 1 ? "Programma Base (W1)" : `Modifica Settimana ${activeWeek}`}</div>
