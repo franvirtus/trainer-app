@@ -10,11 +10,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // --- SICUREZZA: Uso le variabili d'ambiente invece delle chiavi in chiaro ---
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  // --- CHIAVI DIRETTE ---
+  const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
+  const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
+  const supabase = createClient(supabaseUrl, supabaseKey);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -29,10 +28,8 @@ export default function LoginPage() {
       alert("Errore login: " + error.message);
       setLoading(false);
     } else {
-      // Login riuscito -> Aggiorno il router per passare il Middleware
-      router.refresh(); 
-      // Reindirizzo alla Dashboard
-      router.push('/admin/dashboard');
+      // Login riuscito -> Vai alla Dashboard Admin
+      router.push('/admin');
     }
   };
 
@@ -82,7 +79,7 @@ export default function LoginPage() {
           <button 
             type="submit" 
             disabled={loading}
-            className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold text-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-xl hover:scale-[1.02] active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+            className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold text-lg hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-xl hover:scale-[1.02] active:scale-95"
           >
             {loading ? "Accesso..." : <>ENTRA <ArrowRight size={20}/></>}
           </button>
