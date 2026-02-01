@@ -5,7 +5,7 @@ import { useState, useEffect, use } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
-  ArrowLeft, Plus, Dumbbell, Trash2, ExternalLink, Activity, Clock, Share2, Save, Scale, User, ClipboardList, Ruler, Calendar, History, X, FileText
+  ArrowLeft, Plus, Dumbbell, Trash2, ExternalLink, Activity, Clock, Share2, Save, Scale, User, ClipboardList, Ruler, Calendar, History, X, FileText, AlertTriangle
 } from "lucide-react";
 
 // --- COMPONENTI UI ---
@@ -93,6 +93,7 @@ export default function ClientPage({ params }) {
 
   const fetchData = async () => {
     setLoading(true);
+    // Fetch Cliente
     const { data: clientData } = await supabase.from("clients").select("*").eq("id", id).single();
     if (clientData) {
       setClient(clientData);
@@ -102,19 +103,36 @@ export default function ClientPage({ params }) {
         height_cm: clientData.height_cm ?? "", current_weight_kg: clientData.current_weight_kg ?? "", goal: clientData.goal || "",
       });
     }
+
+    // Fetch Programmi
     const { data: programsData } = await supabase.from("programs").select("*").eq("client_id", id).order("created_at", { ascending: false });
     setPrograms(programsData || []);
     
+    // Fetch Logs Recenti
     if (programsData?.length > 0) {
       const progIds = programsData.map((p) => p.id);
       const { data: simpleLogs } = await supabase.from("workout_logs").select("*").in("program_id", progIds).order("created_at", { ascending: false }).limit(20);
       setRecentLogs(simpleLogs || []);
     }
+
+    // Fetch Metriche
     const { data: mData } = await supabase.from("client_metrics").select("*").eq("client_id", id).order("measured_at", { ascending: false }).limit(10);
     setMetrics(mData || []);
     const { data: bData } = await supabase.from("client_measurements").select("*").eq("client_id", id).order("measured_at", { ascending: false }).limit(10);
     setBodyMeasuresHistory(bData || []);
+    
     setLoading(false);
+  };
+
+  // LOGICA SCADENZA
+  const checkExpired = (p) => {
+      if (!p.created_at || !p.duration) return false;
+      const start = new Date(p.created_at);
+      const end = new Date(start);
+      end.setDate(start.getDate() + (p.duration * 7));
+      // Aggiungiamo un giorno di tolleranza
+      const today = new Date();
+      return today > end;
   };
 
   const saveProfile = async () => {
@@ -151,12 +169,9 @@ export default function ClientPage({ params }) {
     if (!cpTitle.trim()) return alert("Nome scheda obbligatorio");
     setCreatingProgram(true);
     
-    // --- FIX DEFINITIVO NOME COACH ---
     const { data: { user } } = await supabase.auth.getUser();
     let coachName = "Coach";
-    
     if (user) {
-        // Cerca ovunque: user_metadata.name, user_metadata.full_name, o email
         const meta = user.user_metadata || {};
         if (meta.full_name) coachName = meta.full_name;
         else if (meta.name) coachName = meta.name;
@@ -195,15 +210,26 @@ export default function ClientPage({ params }) {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans pb-20">
+      
+      {/* HEADER */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
           <div className="max-w-6xl mx-auto px-6 py-4">
             <div className="flex items-center justify-between min-h-[48px]">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => router.push("/admin/dashboard")} className="p-2 hover:bg-slate-100 rounded-full transition text-slate-500"><ArrowLeft size={22} /></button>
-                    <div><h1 className="text-2xl font-black text-slate-900 uppercase leading-none">{client?.full_name}</h1><span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Atleta</span></div>
+                    {/* FIX: TASTO INDIETRO ESPLICITO */}
+                    <button 
+                        onClick={() => router.push("/admin/dashboard")} 
+                        className="p-2 hover:bg-slate-100 rounded-full transition text-slate-500"
+                    >
+                        <ArrowLeft size={22} />
+                    </button>
+                    <div>
+                        <h1 className="text-2xl font-black text-slate-900 uppercase leading-none">{client?.full_name}</h1>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Atleta</span>
+                    </div>
                 </div>
                 {activeTab === 'programs' && (
-                    <button onClick={() => setShowCreateProgram(true)} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-black transition transform active:scale-95 text-sm animate-in fade-in zoom-in duration-200">
+                    <button onClick={() => setShowCreateProgram(true)} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-black transition transform active:scale-95 text-sm">
                         <Plus size={18} /> <span className="hidden sm:inline">Nuova Scheda</span>
                     </button>
                 )}
@@ -217,6 +243,8 @@ export default function ClientPage({ params }) {
       </div>
 
       <div className="max-w-6xl mx-auto p-6 space-y-8">
+        
+        {/* TAB PROFILO */}
         {activeTab === "profile" && (
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <div className="xl:col-span-1 space-y-6">
@@ -261,28 +289,60 @@ export default function ClientPage({ params }) {
                 </div>
             </div>
         )}
+
+        {/* TAB SCHEDE */}
         {activeTab === "programs" && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                {programs.length === 0 ? (<div className="bg-white p-12 rounded-3xl border-2 border-dashed border-slate-200 text-center flex flex-col items-center"><div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 mb-4"><Dumbbell size={32}/></div><h3 className="font-bold text-slate-800 text-lg">Nessuna scheda attiva</h3><p className="text-slate-500 text-sm mb-6">Inizia creando il primo programma di allenamento.</p><button onClick={() => setShowCreateProgram(true)} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition">Crea Scheda Ora</button></div>) : (<div className="grid gap-4">{programs.map(p => (<div key={p.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-300 transition-all group flex flex-col md:flex-row justify-between items-start gap-4">
-                    <div className="w-full">
-                        <div className="flex items-center gap-2 mb-1"><h3 className="font-bold text-xl text-slate-900">{p.title}</h3><span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold uppercase rounded-md tracking-wider">Attiva</span></div>
-                        <div className="flex items-center gap-4 text-xs text-slate-500 font-medium mb-3"><span className="flex items-center gap-1"><Clock size={14}/> {p.duration} Settimane</span><span className="flex items-center gap-1"><Calendar size={14}/> {new Date(p.created_at).toLocaleDateString()}</span></div>
-                        {p.notes && (
-                            <div className="mb-4 bg-slate-50 p-3 rounded-xl border border-slate-100 flex gap-2 items-start">
-                                <FileText size={16} className="text-slate-400 mt-0.5 shrink-0"/>
-                                <p className="text-sm text-slate-600 italic">"{p.notes}"</p>
-                            </div>
-                        )}
-                        <div className="flex items-center gap-2 w-full md:w-auto mt-auto">
-                            <button onClick={() => router.push(`/admin/editor/${p.id}`)} className="flex-1 md:flex-none py-2.5 px-4 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200 transition">MODIFICA</button>
-                            <button onClick={() => window.open(`/live/${p.id}`,'_blank')} className="flex-1 md:flex-none py-2.5 px-4 bg-green-50 text-green-600 font-bold rounded-xl text-xs hover:bg-green-100 transition flex items-center justify-center gap-2"><ExternalLink size={16}/> LIVE</button>
-                            <button onClick={() => copyLink(p.id)} className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition" title="Condividi Link"><Share2 size={20}/></button>
-                            <button onClick={() => deleteProgram(p.id)} className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition" title="Elimina Scheda"><Trash2 size={20}/></button>
-                        </div>
+                {programs.length === 0 ? (
+                    <div className="bg-white p-12 rounded-3xl border-2 border-dashed border-slate-200 text-center flex flex-col items-center">
+                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 mb-4"><Dumbbell size={32}/></div>
+                        <h3 className="font-bold text-slate-800 text-lg">Nessuna scheda attiva</h3>
+                        <p className="text-slate-500 text-sm mb-6">Inizia creando il primo programma di allenamento.</p>
+                        <button onClick={() => setShowCreateProgram(true)} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition">Crea Scheda Ora</button>
                     </div>
-                </div>))}</div>)}
+                ) : (
+                    <div className="grid gap-4">
+                        {programs.map(p => {
+                            // CALCOLO SCADENZA
+                            const isExpired = checkExpired(p);
+                            
+                            return (
+                                <div key={p.id} className={`bg-white p-6 rounded-2xl border shadow-sm transition-all group flex flex-col md:flex-row justify-between items-start gap-4 ${isExpired ? "border-red-200 bg-red-50/10" : "border-slate-200 hover:border-blue-300"}`}>
+                                    <div className="w-full">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <h3 className="font-bold text-xl text-slate-900">{p.title}</h3>
+                                            {isExpired ? (
+                                                <span className="px-2 py-0.5 bg-red-100 text-red-600 text-[10px] font-bold uppercase rounded-md tracking-wider border border-red-200 flex items-center gap-1"><AlertTriangle size={10}/> SCADUTA</span>
+                                            ) : (
+                                                <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold uppercase rounded-md tracking-wider">Attiva</span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-4 text-xs text-slate-500 font-medium mb-3">
+                                            <span className="flex items-center gap-1"><Clock size={14}/> {p.duration} Settimane</span>
+                                            <span className="flex items-center gap-1"><Calendar size={14}/> {new Date(p.created_at).toLocaleDateString()}</span>
+                                        </div>
+                                        {p.notes && (
+                                            <div className="mb-4 bg-slate-50 p-3 rounded-xl border border-slate-100 flex gap-2 items-start">
+                                                <FileText size={16} className="text-slate-400 mt-0.5 shrink-0"/>
+                                                <p className="text-sm text-slate-600 italic">"{p.notes}"</p>
+                                            </div>
+                                        )}
+                                        <div className="flex items-center gap-2 w-full md:w-auto mt-auto">
+                                            <button onClick={() => router.push(`/admin/editor/${p.id}`)} className="flex-1 md:flex-none py-2.5 px-4 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200 transition">MODIFICA</button>
+                                            <button onClick={() => window.open(`/live/${p.id}`,'_blank')} className="flex-1 md:flex-none py-2.5 px-4 bg-green-50 text-green-600 font-bold rounded-xl text-xs hover:bg-green-100 transition flex items-center justify-center gap-2"><ExternalLink size={16}/> LIVE</button>
+                                            <button onClick={() => copyLink(p.id)} className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition" title="Condividi Link"><Share2 size={20}/></button>
+                                            <button onClick={() => deleteProgram(p.id)} className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition" title="Elimina Scheda"><Trash2 size={20}/></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
         )}
+
+        {/* TAB ATTIVITÀ */}
         {activeTab === "activity" && (
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <SectionTitle icon={ClipboardList} title="Registro Allenamenti" />
@@ -309,7 +369,6 @@ export default function ClientPage({ params }) {
                <div className="space-y-5">
                    <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Nome Programma</label><input autoFocus value={cpTitle} onChange={e => setCpTitle(e.target.value)} placeholder="Es. Ipertrofia Base" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold text-lg outline-none focus:border-blue-500 focus:bg-white transition placeholder:font-normal"/></div>
                    <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Durata (Settimane)</label><input type="number" value={cpDuration} onChange={e => setCpDuration(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold text-lg outline-none focus:border-blue-500 focus:bg-white transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/></div>
-                   {/* CAMPO NOTE AGGIUNTO */}
                    <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Note Generali Scheda</label><textarea value={cpNotes} onChange={e => setCpNotes(e.target.value)} placeholder="Es. Focus sull'intensità..." className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-medium text-slate-700 outline-none focus:border-blue-500 focus:bg-white transition resize-none h-20"/></div>
                    
                    <div className="pt-2"><button onClick={createProgram} disabled={creatingProgram} className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-black transition shadow-lg shadow-slate-300 disabled:opacity-50 flex justify-center gap-2">{creatingProgram ? "Creazione..." : <><Plus size={20}/> Crea Scheda</>}</button></div>
