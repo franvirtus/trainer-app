@@ -5,7 +5,7 @@ import { useState, useEffect, use, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Save, Plus, Trash2, Copy, GripVertical, Info, FileText, Dumbbell, Edit2, Clock
+  ArrowLeft, Save, Plus, Minus, Trash2, Copy, GripVertical, Info, FileText, Dumbbell, Edit2, Clock
 } from "lucide-react";
 
 export default function EditorPage({ params }) {
@@ -20,7 +20,7 @@ export default function EditorPage({ params }) {
   const [days, setDays] = useState([]); 
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [activeWeek, setActiveWeek] = useState(1);
-  const [duration, setDuration] = useState(4); // Stato durata
+  const [duration, setDuration] = useState(4); 
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -65,7 +65,7 @@ export default function EditorPage({ params }) {
     setLoading(false);
   };
 
-  // --- LOGICHE (INVARIATE) ---
+  // --- LOGICHE ---
   const getExerciseDisplayData = (ex) => {
       if (activeWeek === 1) return ex;
       const override = ex.progression?.[activeWeek];
@@ -148,14 +148,29 @@ export default function EditorPage({ params }) {
     }));
   };
 
-  // --- NUOVA FUNZIONE AGGIUNGI SETTIMANA ---
+  // --- GESTIONE DURATA (ADD & REMOVE) ---
   const addWeek = async () => {
       const newDuration = Number(duration) + 1;
       setDuration(newDuration);
-      // Salva subito nel DB per persistenza immediata
       await supabase.from("programs").update({ duration: newDuration }).eq("id", id);
-      // Sposta subito la vista sulla nuova settimana
       setActiveWeek(newDuration);
+  };
+
+  const removeWeek = async () => {
+      if (Number(duration) <= 1) return; // Minimo 1 settimana
+      
+      const confirmDelete = confirm("Sei sicuro di voler rimuovere l'ultima settimana? Se ci sono dati salvati per quella settimana potrebbero andare persi.");
+      if (!confirmDelete) return;
+
+      const newDuration = Number(duration) - 1;
+      setDuration(newDuration);
+      
+      // Se stavo guardando proprio la settimana che ho cancellato, torno indietro
+      if (activeWeek > newDuration) {
+          setActiveWeek(newDuration);
+      }
+
+      await supabase.from("programs").update({ duration: newDuration }).eq("id", id);
   };
 
   const saveProgram = async () => {
@@ -193,7 +208,7 @@ export default function EditorPage({ params }) {
             <button onClick={saveProgram} disabled={saving} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-black transition shadow-lg disabled:opacity-50"><Save size={18}/> {saving ? "..." : "SALVA"}</button>
         </div>
 
-        {/* SETTIMANE TOGGLE CON TASTO PIÙ */}
+        {/* SETTIMANE TOGGLE + CONTROLLI */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 items-center">
             {Array.from({ length: Number(duration) || 4 }).map((_, i) => {
                 const w = i + 1;
@@ -208,19 +223,28 @@ export default function EditorPage({ params }) {
                 );
             })}
             
-            {/* TASTO AGGIUNGI SETTIMANA */}
-            <button 
-                onClick={addWeek}
-                className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border-2 border-dashed border-slate-300 text-slate-400 hover:bg-slate-50 hover:text-blue-600 hover:border-blue-400 transition"
-                title="Aggiungi Settimana"
-            >
-                <Plus size={18} />
-            </button>
+            {/* GRUPPO TASTI PIÙ / MENO */}
+            <div className="flex items-center gap-1 ml-1 border-l border-slate-200 pl-2">
+                <button 
+                    onClick={removeWeek}
+                    disabled={duration <= 1}
+                    className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border-2 border-dashed border-slate-300 text-slate-400 hover:bg-red-50 hover:text-red-500 hover:border-red-300 transition disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Rimuovi Settimana"
+                >
+                    <Minus size={18} />
+                </button>
+                <button 
+                    onClick={addWeek}
+                    className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border-2 border-dashed border-slate-300 text-slate-400 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition"
+                    title="Aggiungi Settimana"
+                >
+                    <Plus size={18} />
+                </button>
+            </div>
         </div>
       </div>
 
       <div className="max-w-4xl mx-auto p-6 space-y-6">
-        
         {/* DAY TABS */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2">
           {days.map((day, idx) => {
