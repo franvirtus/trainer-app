@@ -1,6 +1,6 @@
 "use client";
 import { useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr'; // <--- CAMBIAMENTO IMPORTANTE
 import { useRouter } from 'next/navigation';
 import { Lock, Mail, ArrowRight, Dumbbell } from 'lucide-react';
 
@@ -10,9 +10,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Usa le variabili d'ambiente (più sicuro)
-  // Assicurati di aver creato il file .env.local con le chiavi!
-  const supabase = createClient(
+  // --- ORA USIAMO IL CLIENT BROWSER CHE GESTISCE I COOKIE ---
+  const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
@@ -30,8 +29,9 @@ export default function LoginPage() {
       alert("Errore login: " + error.message);
       setLoading(false);
     } else {
-      // Login riuscito -> Aggiorna router per il middleware -> Dashboard
-      router.refresh();
+      // 1. Aggiorniamo il router per assicurarci che i cookie siano visti
+      router.refresh(); 
+      // 2. Andiamo alla dashboard
       router.push('/admin/dashboard');
     }
   };
@@ -79,7 +79,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* LINK PASSWORD DIMENTICATA AGGIUNTO QUI */}
           <div className="flex justify-end">
             <button 
               type="button"
