@@ -5,7 +5,7 @@ import { useState, useEffect, use } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Save, Plus, Trash2, Copy, GripVertical, Settings, Info, FileText, Dumbbell
+  ArrowLeft, Save, Plus, Trash2, Copy, GripVertical, Settings, Info, FileText, Dumbbell, Edit2
 } from "lucide-react";
 
 export default function EditorPage({ params }) {
@@ -207,18 +207,25 @@ export default function EditorPage({ params }) {
         {/* CARD GIORNO ATTIVO */}
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             
-            {/* Header Giorno - PULITO (Senza quadratino lettera) */}
-            <div className="bg-slate-50 border-b border-slate-200 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Nome Giornata</label>
+            {/* HEADER GIORNO: Stile Titolo + Matita */}
+            <div className="bg-slate-50 border-b border-slate-200 p-5 flex items-center justify-between gap-4">
+                <div className="flex-1 group relative">
+                    {/* Input mascherato da Titolo */}
                     <input 
                         value={activeDay.name || ''} 
                         onChange={(e) => updateDayName(e.target.value)} 
-                        className="bg-transparent font-black text-2xl text-slate-800 outline-none w-full placeholder:text-slate-300" 
-                        placeholder="Es. Giorno A"
+                        className="bg-transparent font-black text-3xl text-slate-800 outline-none w-full placeholder:text-slate-300 border-b border-transparent focus:border-slate-300 transition-all pb-1"
+                        placeholder="Nome Giorno"
                     />
+                    {/* Icona matita decorativa che suggerisce l'edit */}
+                    <div className="absolute top-2 right-0 text-slate-300 pointer-events-none group-hover:text-blue-400 transition-colors">
+                        <Edit2 size={18} />
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 flex items-center gap-1 hover:bg-blue-100 transition">
+                        <Copy size={14}/> Copia W1 su tutte
+                    </button>
                     <button onClick={deleteDay} className="text-slate-400 hover:text-red-500 p-2 transition"><Trash2 size={18}/></button>
                 </div>
             </div>
