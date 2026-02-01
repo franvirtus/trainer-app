@@ -1,6 +1,6 @@
 "use client";
 import { useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr'; // Aggiornato a SSR per coerenza
 import { useRouter } from 'next/navigation';
 import { Mail, ArrowLeft, Loader2, CheckCircle } from 'lucide-react';
 
@@ -11,7 +11,8 @@ export default function ForgotPassword() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
 
-  const supabase = createClient(
+  // Usa il client browser che gestisce meglio i cookie
+  const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
@@ -21,10 +22,14 @@ export default function ForgotPassword() {
     setLoading(true);
     setError(null);
 
-    // Qui diciamo a Supabase: "Manda una mail a questo indirizzo
-    // e quando cliccano, portali alla pagina /update-password"
+    // --- MODIFICA FONDAMENTALE ---
+    // Invece di mandare direttamente a /update-password,
+    // mandiamo l'utente al "Ponte" (/auth/callback) che lo logga
+    // e poi LOI lo manda a /update-password.
+    const redirectUrl = `${window.location.origin}/auth/callback?next=/update-password`;
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/update-password`,
+      redirectTo: redirectUrl,
     });
 
     if (error) {
