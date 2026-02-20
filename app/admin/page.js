@@ -2,18 +2,18 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js'; // <--- Questo è il primo "createClient"
+import { createBrowserClient } from '@supabase/ssr'; // Utilizza questo import per la compatibilità Vercel
 import { useRouter } from 'next/navigation';
 import { Plus, Users, ChevronRight, LogOut, User, Trash2 } from 'lucide-react';
 
 export default function AdminDashboard() {
   const router = useRouter();
   
-  const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
-  const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
-  
-  // Qui usiamo il primo "createClient" per connetterci
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  // Inizializzazione sicura: legge le variabili che hai già su Vercel
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
 
   const [clients, setClients] = useState([]);
   const [trainerName, setTrainerName] = useState('');
@@ -24,57 +24,68 @@ export default function AdminDashboard() {
   }, []);
 
   const fetchData = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push('/'); return; }
+    setLoading(true);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) { 
+      router.push('/login'); 
+      return; 
+    }
 
     setTrainerName(user.user_metadata?.first_name || user.email.split('@')[0]);
 
+    // Scarica i clienti attivi usando la colonna full_name (già presente nel tuo schema)
     const { data, error } = await supabase
       .from('clients')
       .select('*')
+      .eq('is_active', true)
       .order('created_at', { ascending: false });
 
     if (!error) setClients(data || []);
     setLoading(false);
   };
 
-  // --- HO RINOMINATO QUESTA FUNZIONE PER EVITARE IL CONFLITTO ---
   const createNewClient = async () => {
     const name = prompt("Nome e Cognome nuovo atleta:");
     if (!name) return;
 
-    // Nota: Ho aggiunto full_name come priorità, ma mantenuto name come fallback se il DB è vecchio
-    const { error } = await supabase.from('clients').insert([{ full_name: name }]); 
-    
-    // Se il tuo DB usa ancora la colonna 'name' invece di 'full_name', usa questa riga invece:
-    // const { error } = await supabase.from('clients').insert([{ name: name }]); 
+    const { error } = await supabase.from('clients').insert([{ 
+      full_name: name,
+      is_active: true 
+    }]); 
     
     if (error) {
-        // Fallback intelligente: se fallisce full_name, prova con name
-        const { error: err2 } = await supabase.from('clients').insert([{ name: name }]);
-        if(err2) alert("Errore DB: " + error.message);
-        else fetchData();
+        alert("Errore creazione: " + error.message);
     } else {
         fetchData();
     }
   };
 
-  const deleteClient = async (e, clientId, clientName) => {
+  const deactivateClient = async (e, clientId, clientName) => {
       e.stopPropagation(); 
-      if(!confirm(`Sei sicuro di voler eliminare ${clientName}?\nQuesta azione eliminerà anche tutte le sue schede e non è reversibile.`)) return;
+      if(!confirm(`Vuoi archiviare l'atleta ${clientName}?`)) return;
 
-      const { error } = await supabase.from('clients').delete().eq('id', clientId);
+      const { error } = await supabase
+        .from('clients')
+        .update({ is_active: false })
+        .eq('id', clientId);
 
-      if (error) alert("Errore eliminazione: " + error.message);
+      if (error) alert("Errore: " + error.message);
       else fetchData();
   };
 
   const handleLogout = async () => {
       await supabase.auth.signOut();
-      router.push('/');
+      router.refresh();
+      router.push('/login');
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-500">Caricamento...</div>;
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center text-slate-500 bg-slate-50">
+      <div className="animate-spin w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full mr-3"></div>
+      Caricamento...
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
@@ -95,6 +106,7 @@ export default function AdminDashboard() {
       <div className="max-w-2xl mx-auto p-6">
         {clients.length === 0 ? (
             <div className="text-center py-20 text-slate-400">
+                <Users size={48} className="mx-auto mb-4 opacity-10"/>
                 <p>Nessun atleta trovato.</p>
                 <p className="text-sm">Premi + per iniziare.</p>
             </div>
@@ -107,21 +119,20 @@ export default function AdminDashboard() {
                         className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center cursor-pointer hover:border-blue-500 hover:shadow-md transition-all group"
                     >
                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 font-bold text-xl text-blue-600">
-                                {(client.full_name || client.name || '?').charAt(0).toUpperCase()}
+                            <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center font-bold text-xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                {(client.full_name || '?').charAt(0).toUpperCase()}
                             </div>
-                            <h3 className="font-bold text-lg text-slate-800">{client.full_name || client.name}</h3>
+                            <h3 className="font-bold text-lg text-slate-800">{client.full_name}</h3>
                         </div>
                         
                         <div className="flex items-center gap-3">
                             <button 
-                                onClick={(e) => deleteClient(e, client.id, client.full_name || client.name)}
+                                onClick={(e) => deactivateClient(e, client.id, client.full_name)}
                                 className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition"
-                                title="Elimina Atleta"
                             >
                                 <Trash2 size={18}/>
                             </button>
-                            <ChevronRight className="text-slate-300 group-hover:text-blue-500"/>
+                            <ChevronRight className="text-slate-300 group-hover:text-blue-500 transition"/>
                         </div>
                     </div>
                 ))}

@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr'; // Cambiato per coerenza con la dashboard
 import { useRouter } from 'next/navigation';
 import { Save, ArrowLeft, User, Mail, Phone, FileText, Users } from 'lucide-react';
 import Link from 'next/link';
@@ -10,27 +10,26 @@ import Link from 'next/link';
 export default function NewClientPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  
-  // --- CHIAVI DIRETTE (Fix per Vercel) ---
-  const supabaseUrl = "https://hamzjxkedatewqbqidkm.supabase.co";
-  const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbXpqeGtlZGF0ZXdxYnFpZGttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkwMjczNzYsImV4cCI6MjA4NDYwMzM3Nn0.YzisHzwjC__koapJ7XaJG7NZkhUYld3BPChFc4XFtNM";
 
-  const supabase = createClient(supabaseUrl, supabaseKey);
-  // ---------------------------------------
+  // Usa le variabili del file .env.local o di Vercel
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
 
   const [formData, setFormData] = useState({
     full_name: '',
-    gender: 'F',   // default
+    gender: 'F',
     email: '',
     phone: '',
-    notes: ''
+    notes: '',
+    is_active: true // Assicuriamoci che il nuovo atleta sia attivo
   });
 
   const saveClient = async () => {
     if (!formData.full_name.trim()) return alert("Inserisci almeno il nome e cognome!");
     
     setLoading(true);
-
     const { error } = await supabase
       .from('clients')
       .insert([formData]);
@@ -39,15 +38,14 @@ export default function NewClientPage() {
         alert("Errore: " + error.message);
         setLoading(false);
     } else {
-        router.push('/admin'); 
+        router.push('/admin/dashboard'); 
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 font-sans flex flex-col items-center">
       <div className="max-w-xl w-full">
-        
-        <Link href="/admin" className="flex items-center text-slate-500 mb-6 hover:text-blue-600 gap-2 font-bold text-sm">
+        <Link href="/admin/dashboard" className="flex items-center text-slate-500 mb-6 hover:text-blue-600 gap-2 font-bold text-sm">
             <ArrowLeft size={18}/> Annulla e torna indietro
         </Link>
 
@@ -64,53 +62,27 @@ export default function NewClientPage() {
                     onChange={(e) => setFormData({...formData, full_name: e.target.value})}
                 />
             </div>
-{/* NOME COMPLETO */}
-<div>
-  <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
-    <User size={12}/> Nome Completo *
-  </label>
-  <input
-    type="text"
-    placeholder="Es. Giulia Verdi"
-    className="w-full p-3 border border-slate-200 rounded-xl font-bold text-lg focus:ring-2 focus:ring-blue-500 outline-none"
-    value={formData.full_name}
-    onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-  />
-</div>
 
-{/* SESSO + IMMAGINE */}
-<div>
-  <label className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center gap-1">
-    <Users size={12}/> Sesso
-  </label>
-
-  <div className="grid grid-cols-2 gap-4">
-    <div>
-      <select
-        className="w-full p-3 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500 bg-white"
-        value={formData.gender}
-        onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-      >
-        <option value="F">Femmina</option>
-        <option value="M">Maschio</option>
-      </select>
-    </div>
-
-    <div className="border border-slate-200 rounded-xl bg-slate-50 flex items-center justify-center p-3">
-      <img
-        src={formData.gender === "M" ? "/body-male.png" : "/body-female.png"}
-        alt="Sagoma"
-        className="h-28 object-contain opacity-90"
-      />
-    </div>
-  </div>
-</div>
-
-
-{/* EMAIL + TELEFONO */}
-<div className="grid grid-cols-2 gap-4">
-  ...
-</div>
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center gap-1"><Users size={12}/> Sesso</label>
+                    <select
+                        className="w-full p-3 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500 bg-white"
+                        value={formData.gender}
+                        onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                    >
+                        <option value="F">Femmina</option>
+                        <option value="M">Maschio</option>
+                    </select>
+                </div>
+                <div className="border border-slate-200 rounded-xl bg-slate-50 flex items-center justify-center p-3">
+                    <img
+                        src={formData.gender === "M" ? "/body-male.png" : "/body-female.png"}
+                        alt="Sagoma"
+                        className="h-28 object-contain opacity-90"
+                    />
+                </div>
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
                 <div>
