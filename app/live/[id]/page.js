@@ -819,7 +819,8 @@ export default function LivePage({ params }) {
       (allLogs || []).forEach((log) => {
         const w = Number(log.week_number) || 1;
         if (!byWeek[w]) byWeek[w] = {};
-        const exIdx = Number.isFinite(Number(log.exercise_index)) ? Number(log.exercise_index) : 0;
+        const exIdx = Number(log.exercise_index);
+if (!Number.isInteger(exIdx) || exIdx < 0) return;
         const k = makeKey(log.exercise_name, log.day_label, exIdx);
         byWeek[w][k] = {
           ...log,
@@ -858,7 +859,8 @@ export default function LivePage({ params }) {
     const logsMap = {};
     if (savedLogs?.length) {
       savedLogs.forEach((log) => {
-        const exIdx = Number.isFinite(Number(log.exercise_index)) ? Number(log.exercise_index) : 0;
+        const exIdx = Number(log.exercise_index);
+if (!Number.isInteger(exIdx) || exIdx < 0) return;
         const k = makeKey(log.exercise_name, log.day_label, exIdx);
 
         logsMap[k] = {
@@ -879,11 +881,21 @@ export default function LivePage({ params }) {
         .select("*")
         .eq("program_id", id)
         .eq("week_number", activeWeek - 1);
+        console.log("prevLogs total:", prevLogs?.length || 0);
+console.log(
+  "prevLogs invalid index:",
+  (prevLogs || []).filter(l => !Number.isInteger(Number(l.exercise_index))).length
+);
+console.log(
+  "prevLogs sample indexes:",
+  (prevLogs || []).slice(0, 20).map(l => l.exercise_index)
+);
 
       const historyMap = {};
       if (prevLogs?.length) {
         prevLogs.forEach((log) => {
-          const exIdx = Number.isFinite(Number(log.exercise_index)) ? Number(log.exercise_index) : 0;
+          const exIdx = Number(log.exercise_index);
+if (!Number.isInteger(exIdx) || exIdx < 0) return;
           const k = makeKey(log.exercise_name, log.day_label, exIdx);
 
           historyMap[k] = {
