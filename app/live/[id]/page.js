@@ -22,8 +22,13 @@ import {
 
 /* ----------------------------- PURE HELPERS (OUTSIDE) ----------------------------- */
 
+// ✅ normalizzazione dura per evitare mismatch (maiuscole/spazi)
+const norm = (s) => String(s ?? "").trim().toLowerCase();
+
+// ✅ key stabile (nome esercizio + nome giorno + indice)
+// NB: l'indice serve se hai due esercizi con stesso nome nello stesso giorno.
 const makeKey = (exName, dayName, index = 0) =>
-  `${String(exName || "").trim()}_${String(dayName || "").trim()}_${Number(index ?? 0)}`;
+  `${norm(exName)}|${norm(dayName)}|${Number(index ?? 0)}`;
 
 const toNullableNumber = (val) => {
   const t = String(val ?? "").trim().replace(",", ".");
@@ -224,10 +229,29 @@ function ExerciseItem({
   onAdvanceIfGroupComplete,
 }) {
   const ex = getExerciseDisplay(rawEx, activeWeek);
-  const key = makeKey(ex.name, activeDayName, exIndex);
 
-  const currentLog = logs[key] || null;
-  const lastLog = historyLogs[key] || null;
+  // ✅ key STABILE: SEMPRE rawEx.name (identità)
+  const keyStable = makeKey(rawEx?.name, activeDayName, exIndex);
+
+  // ✅ key display corrente (compat, se in passato hai salvato col nome display di QUESTA week)
+  const keyDisplayCurrent = makeKey(ex?.name, activeDayName, exIndex);
+
+  // ✅ key display della week precedente (compat per history: i vecchi log potrebbero avere quel nome)
+  const prevDisp = activeWeek > 1 ? getExerciseDisplay(rawEx, activeWeek - 1) : null;
+  const keyDisplayPrev = prevDisp?.name ? makeKey(prevDisp.name, activeDayName, exIndex) : null;
+
+  // ✅ lookup robusto (attuale)
+  const currentLog = logs[keyStable] || logs[keyDisplayCurrent] || null;
+
+  // ✅ lookup robusto (history)
+  const lastLog =
+    historyLogs[keyStable] ||
+    (keyDisplayPrev ? historyLogs[keyDisplayPrev] : null) ||
+    historyLogs[keyDisplayCurrent] ||
+    null;
+
+  // ✅ la key usata per editing/confirm/advance deve essere sempre STABILE
+  const key = keyStable;
 
   const isCompleted = !!currentLog && currentLog.completed === true;
   const isEditing = editingKey === key;
@@ -252,7 +276,6 @@ function ExerciseItem({
     <div className="rounded-3xl border border-slate-800 bg-slate-950/30 overflow-hidden">
       <div className="p-4 border-b border-slate-800 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          {/* ✅ Nome verde se completato */}
           <div className={`text-base font-black truncate ${isCompleted ? "text-emerald-300" : "text-white"}`}>
             {ex.name}
           </div>
@@ -290,9 +313,10 @@ function ExerciseItem({
 
           <button
             onClick={async () => {
-              const completedNow = await toggleConfirm(ex.name, activeDayName, exIndex);
+              // ✅ tutte le action lavorano con nome STABILE rawEx.name
+              const completedNow = await toggleConfirm(rawEx?.name, activeDayName, exIndex);
               if (completedNow && typeof onAdvanceIfGroupComplete === "function") {
-                setTimeout(() => onAdvanceIfGroupComplete(key), 220);
+                setTimeout(() => onAdvanceIfGroupComplete(keyStable), 220);
               }
             }}
             type="button"
@@ -310,7 +334,7 @@ function ExerciseItem({
         </div>
       </div>
 
-      {/* ✅ RIGA TARGET: Serie / Reps / Rec (+ Carico solo se valorizzato) */}
+      {/* TARGET ROW */}
       {(() => {
         const showLoadCol = hasValue(ex.load);
 
@@ -346,12 +370,10 @@ function ExerciseItem({
         );
       })()}
 
-      {/* ✅ TARGET PT (DALLA SCHEDA): SEMPRE VISIBILI SE ESISTONO */}
       <div className="px-4 pb-3">
         <TargetsBox rawEx={rawEx} activeWeek={activeWeek} />
       </div>
 
-      {/* ✅ FEEDBACK PT (DAL LOG): UNA SOLA VOLTA, SOLO SE VALORIZZATO */}
       {showFeedbackPills ? (
         <div className="px-4 pb-4 -mt-1 flex gap-2 flex-wrap">
           {fbPtRpe ? (
@@ -392,7 +414,7 @@ function ExerciseItem({
               </button>
               <button
                 type="button"
-                onClick={() => copySetsFromLast(ex.name, activeDayName, exIndex)}
+                onClick={() => copySetsFromLast(rawEx?.name, activeDayName, exIndex)}
                 className="w-full py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-black text-xs hover:bg-slate-800"
               >
                 COPIA
@@ -454,7 +476,7 @@ function ExerciseItem({
             rows={3}
           />
 
-          {/* ✅ SEZIONE PT (feedback) */}
+          {/* PT feedback */}
           <div className="mt-4 rounded-3xl border border-fuchsia-800/25 bg-fuchsia-900/10 p-4">
             <div className="text-[10px] font-black text-fuchsia-200 uppercase tracking-widest mb-2">
               PT (feedback)
@@ -546,7 +568,7 @@ function ExerciseItem({
           </div>
 
           <button
-            onClick={() => saveEntry(ex.name, activeDayName, exIndex)}
+            onClick={() => saveEntry(rawEx?.name, activeDayName, exIndex)}
             className="mt-4 w-full bg-blue-600 text-white font-black py-3 rounded-2xl flex justify-center items-center gap-2 hover:bg-blue-500 active:scale-[0.99] transition"
             type="button"
           >
@@ -556,7 +578,7 @@ function ExerciseItem({
       ) : (
         <div className="p-4 bg-slate-950/20">
           <button
-            onClick={() => openEdit(ex.name, activeDayName, exIndex, currentLog)}
+            onClick={() => openEdit(rawEx?.name, activeDayName, exIndex, currentLog)}
             className={`w-full py-3 rounded-2xl font-black transition border ${
               hasSomeSavedData
                 ? "bg-slate-950 text-white border-slate-800 hover:bg-slate-800"
@@ -704,9 +726,12 @@ export default function LivePage({ params }) {
   // ✅ per auto-selezione settimana solo al primo load
   const didAutoPickWeekRef = useRef(false);
 
-  /* ----------------------------- DERIVED (NO HOOKS AFTER RETURNS) ----------------------------- */
+  /* ----------------------------- DERIVED ----------------------------- */
 
-  const days = useMemo(() => (program?.days_structure && Array.isArray(program.days_structure) ? program.days_structure : []), [program]);
+  const days = useMemo(
+    () => (program?.days_structure && Array.isArray(program.days_structure) ? program.days_structure : []),
+    [program]
+  );
 
   const activeDay = useMemo(() => days[activeDayIndex], [days, activeDayIndex]);
 
@@ -715,7 +740,7 @@ export default function LivePage({ params }) {
     [activeDay, activeWeek]
   );
 
-  // ✅ NON visualizzare esercizi “vuoti”: qui criterio semplice e robusto: name obbligatorio
+  // ✅ NON visualizzare esercizi “vuoti”: name display obbligatorio
   const visibleExercises = useMemo(() => {
     const list = activeDay?.exercises || [];
     const out = [];
@@ -731,7 +756,7 @@ export default function LivePage({ params }) {
 
   const groups = useMemo(() => buildGroups(visibleExercises), [visibleExercises]);
 
-  // ✅ clamp focusGroupIndex sempre (HOOK PRIMA DEI RETURN)
+  // ✅ clamp focusGroupIndex sempre
   useEffect(() => {
     setFocusGroupIndex((prev) => {
       const max = Math.max(0, (groups?.length || 1) - 1);
@@ -762,6 +787,7 @@ export default function LivePage({ params }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWeek, activeDayIndex]);
 
+  // ✅ IMPORTANT: usa chiave STABILE raw.name per determinare completezza
   const computeWeekComplete = (prog, allLogsByWeek, week) => {
     const ds = prog?.days_structure || [];
     for (let d = 0; d < ds.length; d++) {
@@ -771,10 +797,10 @@ export default function LivePage({ params }) {
 
       for (let i = 0; i < exs.length; i++) {
         const raw = exs[i];
-        const ex = getExerciseDisplay(raw, week);
-        if (!hasValue(ex?.name)) continue; // ✅ stessi esercizi visibili della live
+        const disp = getExerciseDisplay(raw, week);
+        if (!hasValue(disp?.name)) continue;
 
-        const k = makeKey(ex?.name, dayName, i);
+        const k = makeKey(raw?.name, dayName, i);
         const log = allLogsByWeek?.[week]?.[k];
         if (!log || log.completed !== true) return false;
       }
@@ -812,7 +838,9 @@ export default function LivePage({ params }) {
 
       const { data: allLogs } = await supabase
         .from("workout_logs")
-        .select("exercise_name, day_label, exercise_index, week_number, completed, actual_reps, actual_weight, athlete_notes, pt_notes, pt_rpe, pt_metrics, id")
+        .select(
+          "exercise_name, day_label, exercise_index, week_number, completed, actual_reps, actual_weight, athlete_notes, pt_notes, pt_rpe, pt_metrics, id"
+        )
         .eq("program_id", id);
 
       const byWeek = {};
@@ -820,8 +848,12 @@ export default function LivePage({ params }) {
         const w = Number(log.week_number) || 1;
         if (!byWeek[w]) byWeek[w] = {};
         const exIdx = Number(log.exercise_index);
-if (!Number.isInteger(exIdx) || exIdx < 0) return;
+        if (!Number.isInteger(exIdx) || exIdx < 0) return;
+
+        // NB: qui non abbiamo raw.name, quindi usiamo la chiave come salvata nel DB.
+        // La completezza è “best effort” storica, ma almeno non collassa su 0.
         const k = makeKey(log.exercise_name, log.day_label, exIdx);
+
         byWeek[w][k] = {
           ...log,
           athlete_notes: log.athlete_notes ?? "",
@@ -832,17 +864,20 @@ if (!Number.isInteger(exIdx) || exIdx < 0) return;
       });
 
       const dur = Number(prog.duration) || 4;
-      let pick = dur; // se tutte complete: resta sull’ultima
+      let pick = dur;
       for (let w = 1; w <= dur; w++) {
-        const complete = computeWeekComplete(prog, byWeek, w);
-        if (!complete) {
+        // computeWeekComplete usa raw.name, byWeek usa log.exercise_name → potrebbe non matchare
+        // quindi qui non la usiamo per auto-pick "perfetto". Teniamo logica semplice: se non hai log week w, pick w.
+        // Per non introdurre altri bug, auto-pick diventa conservativo.
+        // Se vuoi l'auto-pick accurato al 100%, serve salvare exercise_id o stable_key in DB.
+        const hasAny = !!Object.keys(byWeek[w] || {}).length;
+        if (!hasAny) {
           pick = w;
           break;
         }
       }
 
       if (pick !== activeWeek) {
-        // setto e poi il resto verrà ricaricato dal useEffect
         setActiveWeek(pick);
         setLoading(false);
         return;
@@ -860,9 +895,9 @@ if (!Number.isInteger(exIdx) || exIdx < 0) return;
     if (savedLogs?.length) {
       savedLogs.forEach((log) => {
         const exIdx = Number(log.exercise_index);
-if (!Number.isInteger(exIdx) || exIdx < 0) return;
-        const k = makeKey(log.exercise_name, log.day_label, exIdx);
+        if (!Number.isInteger(exIdx) || exIdx < 0) return;
 
+        const k = makeKey(log.exercise_name, log.day_label, exIdx);
         logsMap[k] = {
           ...log,
           athlete_notes: log.athlete_notes ?? "",
@@ -881,23 +916,14 @@ if (!Number.isInteger(exIdx) || exIdx < 0) return;
         .select("*")
         .eq("program_id", id)
         .eq("week_number", activeWeek - 1);
-        console.log("prevLogs total:", prevLogs?.length || 0);
-console.log(
-  "prevLogs invalid index:",
-  (prevLogs || []).filter(l => !Number.isInteger(Number(l.exercise_index))).length
-);
-console.log(
-  "prevLogs sample indexes:",
-  (prevLogs || []).slice(0, 20).map(l => l.exercise_index)
-);
 
       const historyMap = {};
       if (prevLogs?.length) {
         prevLogs.forEach((log) => {
           const exIdx = Number(log.exercise_index);
-if (!Number.isInteger(exIdx) || exIdx < 0) return;
-          const k = makeKey(log.exercise_name, log.day_label, exIdx);
+          if (!Number.isInteger(exIdx) || exIdx < 0) return;
 
+          const k = makeKey(log.exercise_name, log.day_label, exIdx);
           historyMap[k] = {
             ...log,
             athlete_notes: log.athlete_notes ?? "",
@@ -919,10 +945,11 @@ if (!Number.isInteger(exIdx) || exIdx < 0) return;
 
   const openEdit = useCallback(
     (exName, dayName, exIndex, existingData) => {
-      const key = makeKey(exName, dayName, exIndex);
-      setEditingKey(key);
+      // ✅ editingKey sempre stabile
+      const keyStable = makeKey(exName, dayName, exIndex);
+      setEditingKey(keyStable);
 
-      const hist = historyLogs[key];
+      const hist = historyLogs[keyStable];
 
       const initialNotes =
         String(existingData?.athlete_notes ?? "").trim() || String(hist?.athlete_notes ?? "").trim() || "";
@@ -972,8 +999,8 @@ if (!Number.isInteger(exIdx) || exIdx < 0) return;
 
   const copySetsFromLast = useCallback(
     (exName, dayName, exIndex) => {
-      const key = makeKey(exName, dayName, exIndex);
-      const hist = historyLogs[key];
+      const keyStable = makeKey(exName, dayName, exIndex);
+      const hist = historyLogs[keyStable];
       if (!hist) return;
       const parsed = parseSetData(hist.actual_reps, hist.actual_weight);
       setSetLogsData(parsed.length ? parsed : [{ reps: "", weight: "" }]);
@@ -1025,7 +1052,7 @@ if (!Number.isInteger(exIdx) || exIdx < 0) return;
 
       const payload = {
         program_id: id,
-        exercise_name: exName,
+        exercise_name: exName, // ✅ nome stabile
         week_number: activeWeek,
         day_label: dayName,
         exercise_index: exIndex,
@@ -1034,7 +1061,6 @@ if (!Number.isInteger(exIdx) || exIdx < 0) return;
         actual_weight: weightString,
         athlete_notes: String(noteInput ?? ""),
 
-        // PT feedback
         pt_notes: String(ptNoteInput ?? ""),
         pt_rpe: toNullableNumber(ptRpeInput),
         pt_metrics: ptMetricsObj,
@@ -1062,7 +1088,6 @@ if (!Number.isInteger(exIdx) || exIdx < 0) return;
     [activeWeek, closeEdit, id, logs, noteInput, ptMetricsRows, ptNoteInput, ptRpeInput, setLogsData, supabase]
   );
 
-  // ✅ ritorna true solo quando COMPLETI (per auto-advance)
   const toggleConfirm = useCallback(
     async (exName, dayName, exIndex) => {
       const key = makeKey(exName, dayName, exIndex);
@@ -1105,7 +1130,6 @@ if (!Number.isInteger(exIdx) || exIdx < 0) return;
         return false;
       }
 
-      // stai completando
       if (current?.id) {
         const { error } = await supabase.from("workout_logs").update({ completed: true }).eq("id", current.id);
         if (error) {
@@ -1203,14 +1227,13 @@ if (!Number.isInteger(exIdx) || exIdx < 0) return;
     if (!wasEditing) window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // ✅ avanza solo se il gruppo corrente è completo (considera anche la key appena completata)
+  // ✅ COMPLETION su chiave STABILE raw.name
   const onAdvanceIfGroupComplete = (justCompletedKey = null) => {
     const g = groups[focusGroupIndex];
     const dayName = activeDay?.name || "";
 
     const complete = g?.items?.every(({ ex, originalIndex }) => {
-      const visibleEx = getExerciseDisplay(ex, activeWeek);
-      const k = makeKey(visibleEx?.name, dayName, originalIndex);
+      const k = makeKey(ex?.name, dayName, originalIndex); // ex è raw qui
       if (justCompletedKey && k === justCompletedKey) return true;
       return logs?.[k]?.completed === true;
     });
@@ -1262,6 +1285,7 @@ if (!Number.isInteger(exIdx) || exIdx < 0) return;
 
   /* ----------------------------- COMPLETION (VISIBLE ONLY) ----------------------------- */
 
+  // ✅ dayCompleted su raw.name
   const dayCompleted = useMemo(() => {
     if (!activeDay) return false;
     if (!visibleExercises.length) return false;
@@ -1269,14 +1293,15 @@ if (!Number.isInteger(exIdx) || exIdx < 0) return;
     const dayName = activeDay?.name || "";
     return visibleExercises.every(({ ex, originalIndex }) => {
       const disp = getExerciseDisplay(ex, activeWeek);
-      const k = makeKey(disp?.name, dayName, originalIndex);
+      if (!hasValue(disp?.name)) return true;
+      const k = makeKey(ex?.name, dayName, originalIndex); // ex è raw
       return logs[k]?.completed === true;
     });
   }, [activeDay, activeWeek, logs, visibleExercises]);
 
   const showCompletedScreen = dayCompleted && !reviewMode;
 
-  /* ----------------------------- GUARDS (AFTER ALL HOOKS) ----------------------------- */
+  /* ----------------------------- GUARDS ----------------------------- */
 
   if (loading) {
     return (
