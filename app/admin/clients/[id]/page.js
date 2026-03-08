@@ -160,6 +160,9 @@ const expandLogToEvents = (log) => {
       date_label: ddmmyyyy(log.created_at),
       date_key: dateKey(log.created_at),
       day_label: log.day_label || "",
+      program_id: log.program_id || null,
+      exercise_uid: log.exercise_uid || null,
+      exercise_name_snapshot: String(log.exercise_name_snapshot || log.exercise_name || "").trim(),
       exercise_name: String(log.exercise_name || "").trim(),
       set_index: i + 1,
       reps: repsArr[i] ?? null,
@@ -443,8 +446,9 @@ export default function ClientPage({ params }) {
   const expandedEvents = useMemo(() => {
     const out = [];
     (recentLogs || []).forEach((log) => {
-      const name = String(log.exercise_name || "").trim();
-      if (!name) return;
+      const name = String(log.exercise_name_snapshot || log.exercise_name || "").trim();
+      const uid = String(log.exercise_uid || "").trim();
+      if (!name && !uid) return;
       out.push(...expandLogToEvents(log));
     });
 
@@ -458,18 +462,54 @@ export default function ClientPage({ params }) {
     return out;
   }, [recentLogs]);
 
+  const currentExerciseNameByProgramUid = useMemo(() => {
+    const map = new Map();
+
+    (programs || []).forEach((program) => {
+      const days = Array.isArray(program?.days_structure) ? program.days_structure : [];
+      days.forEach((day) => {
+        const exercises = Array.isArray(day?.exercises) ? day.exercises : [];
+        exercises.forEach((ex) => {
+          const uid = String(ex?.id || "").trim();
+          const name = String(ex?.name || "").trim();
+          if (!uid || !name) return;
+          map.set(`${program.id}__${uid}`, name);
+        });
+      });
+    });
+
+    return map;
+  }, [programs]);
+
   // 2) raggruppiamo per esercizio + day_label
   const exerciseGroups = useMemo(() => {
     const map = new Map();
     expandedEvents.forEach((ev) => {
-      const key = `${ev.exercise_name}__${ev.day_label || ""}`;
+      const currentName = ev.exercise_uid
+        ? currentExerciseNameByProgramUid.get(`${ev.program_id || ""}__${ev.exercise_uid}`)
+        : "";
+
+      const displayName = String(
+        currentName || ev.exercise_name_snapshot || ev.exercise_name || ""
+      ).trim();
+
+      const legacyKey = `${displayName}__${ev.day_label || ""}`;
+      const key = ev.exercise_uid ? `uid:${ev.program_id || ""}:${ev.exercise_uid}` : legacyKey;
+
       const cur = map.get(key) || {
         key,
-        exercise_name: ev.exercise_name,
+        exercise_uid: ev.exercise_uid || null,
+        program_id: ev.program_id || null,
+        exercise_name: displayName,
         day_label: ev.day_label || "",
         events: [],
       };
-      cur.events.push(ev);
+
+      cur.exercise_name = displayName || cur.exercise_name;
+      cur.events.push({
+        ...ev,
+        exercise_display_name: displayName,
+      });
       map.set(key, cur);
     });
 
@@ -481,7 +521,7 @@ export default function ClientPage({ params }) {
     });
 
     return groups;
-  }, [expandedEvents]);
+  }, [expandedEvents, currentExerciseNameByProgramUid]);
 
   // 3) punti grafico: 1 punto = 1 set
   const buildChartPoints = (group) => {

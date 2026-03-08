@@ -30,6 +30,18 @@ const norm = (s) => String(s ?? "").trim().toLowerCase();
 const makeKey = (exName, dayName, index = 0) =>
   `${norm(exName)}|${norm(dayName)}|${Number(index ?? 0)}`;
 
+const makeUidKey = (uid) => {
+  const t = String(uid ?? "").trim();
+  return t ? `uid:${t}` : "";
+};
+
+const makeExerciseLookupKey = (rawEx, dayName, index = 0) =>
+  makeUidKey(rawEx?.id) || makeKey(rawEx?.name, dayName, index);
+
+const makeLogLookupKey = (log) =>
+  makeUidKey(log?.exercise_uid) ||
+  makeKey(log?.exercise_name, log?.day_label, log?.exercise_index);
+
 const toNullableNumber = (val) => {
   const t = String(val ?? "").trim().replace(",", ".");
   if (!t) return null;
@@ -230,28 +242,32 @@ function ExerciseItem({
 }) {
   const ex = getExerciseDisplay(rawEx, activeWeek);
 
-  // ✅ key STABILE: SEMPRE rawEx.name (identità)
-  const keyStable = makeKey(rawEx?.name, activeDayName, exIndex);
-
-  // ✅ key display corrente (compat, se in passato hai salvato col nome display di QUESTA week)
-  const keyDisplayCurrent = makeKey(ex?.name, activeDayName, exIndex);
+  // ✅ key stabile: prima exercise_uid, poi fallback legacy
+  const keyStable = makeExerciseLookupKey(rawEx, activeDayName, exIndex);
+  const keyLegacyRaw = makeKey(rawEx?.name, activeDayName, exIndex);
+  const keyLegacyDisplayCurrent = makeKey(ex?.name, activeDayName, exIndex);
 
   // ✅ key display della week precedente (compat per history: i vecchi log potrebbero avere quel nome)
   const prevDisp = activeWeek > 1 ? getExerciseDisplay(rawEx, activeWeek - 1) : null;
-  const keyDisplayPrev = prevDisp?.name ? makeKey(prevDisp.name, activeDayName, exIndex) : null;
+  const keyLegacyDisplayPrev = prevDisp?.name ? makeKey(prevDisp.name, activeDayName, exIndex) : null;
 
   // ✅ lookup robusto (attuale)
-  const currentLog = logs[keyStable] || logs[keyDisplayCurrent] || null;
+  const currentLog =
+    logs[keyStable] ||
+    logs[keyLegacyRaw] ||
+    logs[keyLegacyDisplayCurrent] ||
+    null;
 
   // ✅ lookup robusto (history)
   const lastLog =
     historyLogs[keyStable] ||
-    (keyDisplayPrev ? historyLogs[keyDisplayPrev] : null) ||
-    historyLogs[keyDisplayCurrent] ||
+    historyLogs[keyLegacyRaw] ||
+    (keyLegacyDisplayPrev ? historyLogs[keyLegacyDisplayPrev] : null) ||
+    historyLogs[keyLegacyDisplayCurrent] ||
     null;
 
   // ✅ la key usata per editing/confirm/advance deve essere sempre STABILE
-  const key = keyStable;
+  const key = keyStable || keyLegacyRaw;
 
   const isCompleted = !!currentLog && currentLog.completed === true;
   const isEditing = editingKey === key;
@@ -315,7 +331,7 @@ function ExerciseItem({
           <button
             onClick={async () => {
               // ✅ tutte le action lavorano con nome STABILE rawEx.name
-              const completedNow = await toggleConfirm(rawEx?.name, activeDayName, exIndex);
+              const completedNow = await toggleConfirm(rawEx, activeDayName, exIndex);
               if (completedNow && typeof onAdvanceIfGroupComplete === "function") {
                 setTimeout(() => onAdvanceIfGroupComplete(keyStable), 220);
               }
@@ -394,22 +410,22 @@ function ExerciseItem({
             </span>
           ) : null}
 
-          {visiblePtNotes ? (
-  <div className="px-4 pb-4 -mt-1">
-    <div className="rounded-2xl border border-fuchsia-800/25 bg-fuchsia-900/10 p-3">
-      <div className="text-[10px] font-black text-fuchsia-200 uppercase tracking-widest mb-2">
-        Note PT
-      </div>
-      <div className="text-sm text-slate-100 whitespace-pre-wrap break-words">{visiblePtNotes}</div>
-    </div>
-  </div>
-) : null}
-
           {fbRir ? (
             <span className="text-[10px] font-black text-amber-200 bg-amber-900/20 px-2 py-1 rounded-xl border border-amber-800/30">
               RIR: {fbRir}
             </span>
           ) : null}
+        </div>
+      ) : null}
+
+      {visiblePtNotes ? (
+        <div className="px-4 pb-4 -mt-1">
+          <div className="rounded-2xl border border-fuchsia-800/25 bg-fuchsia-900/10 p-3">
+            <div className="text-[10px] font-black text-fuchsia-200 uppercase tracking-widest mb-2">
+              Note PT
+            </div>
+            <div className="text-sm text-slate-100 whitespace-pre-wrap break-words">{visiblePtNotes}</div>
+          </div>
         </div>
       ) : null}
 
@@ -437,7 +453,7 @@ function ExerciseItem({
               </button>
               <button
                 type="button"
-                onClick={() => copySetsFromLast(rawEx?.name, activeDayName, exIndex)}
+                onClick={() => copySetsFromLast(rawEx, activeDayName, exIndex)}
                 className="w-full py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-black text-xs hover:bg-slate-800"
               >
                 COPIA
@@ -591,7 +607,7 @@ function ExerciseItem({
           </div>
 
           <button
-            onClick={() => saveEntry(rawEx?.name, activeDayName, exIndex)}
+            onClick={() => saveEntry(rawEx, activeDayName, exIndex)}
             className="mt-4 w-full bg-blue-600 text-white font-black py-3 rounded-2xl flex justify-center items-center gap-2 hover:bg-blue-500 active:scale-[0.99] transition"
             type="button"
           >
@@ -601,7 +617,7 @@ function ExerciseItem({
       ) : (
         <div className="p-4 bg-slate-950/20">
           <button
-            onClick={() => openEdit(rawEx?.name, activeDayName, exIndex, currentLog)}
+            onClick={() => openEdit(rawEx, activeDayName, exIndex, currentLog)}
             className={`w-full py-3 rounded-2xl font-black transition border ${
               hasSomeSavedData
                 ? "bg-slate-950 text-white border-slate-800 hover:bg-slate-800"
@@ -823,7 +839,7 @@ export default function LivePage({ params }) {
         const disp = getExerciseDisplay(raw, week);
         if (!hasValue(disp?.name)) continue;
 
-        const k = makeKey(raw?.name, dayName, i);
+        const k = makeExerciseLookupKey(raw, dayName, i) || makeKey(raw?.name, dayName, i);
         const log = allLogsByWeek?.[week]?.[k];
         if (!log || log.completed !== true) return false;
       }
@@ -862,7 +878,7 @@ export default function LivePage({ params }) {
       const { data: allLogs } = await supabase
         .from("workout_logs")
         .select(
-          "exercise_name, day_label, exercise_index, week_number, completed, actual_reps, actual_weight, athlete_notes, pt_notes, pt_rpe, pt_metrics, id"
+          "exercise_uid, exercise_name, exercise_name_snapshot, day_label, exercise_index, week_number, completed, actual_reps, actual_weight, athlete_notes, pt_notes, pt_rpe, pt_metrics, id"
         )
         .eq("program_id", id);
 
@@ -875,7 +891,7 @@ export default function LivePage({ params }) {
 
         // NB: qui non abbiamo raw.name, quindi usiamo la chiave come salvata nel DB.
         // La completezza è “best effort” storica, ma almeno non collassa su 0.
-        const k = makeKey(log.exercise_name, log.day_label, exIdx);
+        const k = makeLogLookupKey(log);
 
         byWeek[w][k] = {
           ...log,
@@ -920,7 +936,7 @@ export default function LivePage({ params }) {
         const exIdx = Number(log.exercise_index);
         if (!Number.isInteger(exIdx) || exIdx < 0) return;
 
-        const k = makeKey(log.exercise_name, log.day_label, exIdx);
+        const k = makeLogLookupKey(log);
         logsMap[k] = {
           ...log,
           athlete_notes: log.athlete_notes ?? "",
@@ -946,7 +962,7 @@ export default function LivePage({ params }) {
           const exIdx = Number(log.exercise_index);
           if (!Number.isInteger(exIdx) || exIdx < 0) return;
 
-          const k = makeKey(log.exercise_name, log.day_label, exIdx);
+          const k = makeLogLookupKey(log);
           historyMap[k] = {
             ...log,
             athlete_notes: log.athlete_notes ?? "",
@@ -967,12 +983,14 @@ export default function LivePage({ params }) {
   /* ----------------------------- EDIT ----------------------------- */
 
   const openEdit = useCallback(
-    (exName, dayName, exIndex, existingData) => {
+    (rawEx, dayName, exIndex, existingData) => {
       // ✅ editingKey sempre stabile
-      const keyStable = makeKey(exName, dayName, exIndex);
+      const keyStable =
+        makeExerciseLookupKey(rawEx, dayName, exIndex) ||
+        makeKey(rawEx?.name, dayName, exIndex);
       setEditingKey(keyStable);
 
-      const hist = historyLogs[keyStable];
+      const hist = historyLogs[keyStable] || historyLogs[makeKey(rawEx?.name, dayName, exIndex)];
 
       const initialNotes =
         String(existingData?.athlete_notes ?? "").trim() || String(hist?.athlete_notes ?? "").trim() || "";
@@ -1021,9 +1039,11 @@ export default function LivePage({ params }) {
   }, []);
 
   const copySetsFromLast = useCallback(
-    (exName, dayName, exIndex) => {
-      const keyStable = makeKey(exName, dayName, exIndex);
-      const hist = historyLogs[keyStable];
+    (rawEx, dayName, exIndex) => {
+      const keyStable =
+        makeExerciseLookupKey(rawEx, dayName, exIndex) ||
+        makeKey(rawEx?.name, dayName, exIndex);
+      const hist = historyLogs[keyStable] || historyLogs[makeKey(rawEx?.name, dayName, exIndex)];
       if (!hist) return;
       const parsed = parseSetData(hist.actual_reps, hist.actual_weight);
       setSetLogsData(parsed.length ? parsed : [{ reps: "", weight: "" }]);
@@ -1056,8 +1076,13 @@ export default function LivePage({ params }) {
   };
 
   const saveEntry = useCallback(
-    async (exName, dayName, exIndex) => {
-      const key = makeKey(exName, dayName, exIndex);
+    async (rawEx, dayName, exIndex) => {
+      const key =
+        makeExerciseLookupKey(rawEx, dayName, exIndex) ||
+        makeKey(rawEx?.name, dayName, exIndex);
+
+      const exDisplay = getExerciseDisplay(rawEx, activeWeek);
+      const exName = String(exDisplay?.name || rawEx?.name || "").trim();
 
       const normalized = setLogsData.map((s) => ({
         reps: String(s?.reps ?? "").trim(),
@@ -1075,7 +1100,9 @@ export default function LivePage({ params }) {
 
       const payload = {
         program_id: id,
-        exercise_name: exName, // ✅ nome stabile
+        exercise_uid: rawEx?.id || null,
+        exercise_name_snapshot: exName,
+        exercise_name: exName,
         week_number: activeWeek,
         day_label: dayName,
         exercise_index: exIndex,
@@ -1112,8 +1139,13 @@ export default function LivePage({ params }) {
   );
 
   const toggleConfirm = useCallback(
-    async (exName, dayName, exIndex) => {
-      const key = makeKey(exName, dayName, exIndex);
+    async (rawEx, dayName, exIndex) => {
+      const key =
+        makeExerciseLookupKey(rawEx, dayName, exIndex) ||
+        makeKey(rawEx?.name, dayName, exIndex);
+
+      const exDisplay = getExerciseDisplay(rawEx, activeWeek);
+      const exName = String(exDisplay?.name || rawEx?.name || "").trim();
       const current = logs[key];
 
       closeEdit();
@@ -1123,11 +1155,7 @@ export default function LivePage({ params }) {
           const { error } = await supabase
             .from("workout_logs")
             .delete()
-            .eq("program_id", id)
-            .eq("week_number", activeWeek)
-            .eq("day_label", dayName)
-            .eq("exercise_name", exName)
-            .eq("exercise_index", exIndex);
+            .eq("id", current.id);
 
           if (error) {
             alert("Errore rimozione conferma: " + error.message);
@@ -1163,6 +1191,8 @@ export default function LivePage({ params }) {
       } else {
         const basePayload = {
           program_id: id,
+          exercise_uid: rawEx?.id || null,
+          exercise_name_snapshot: exName,
           exercise_name: exName,
           week_number: activeWeek,
           day_label: dayName,
@@ -1256,7 +1286,7 @@ export default function LivePage({ params }) {
     const dayName = activeDay?.name || "";
 
     const complete = g?.items?.every(({ ex, originalIndex }) => {
-      const k = makeKey(ex?.name, dayName, originalIndex); // ex è raw qui
+      const k = makeExerciseLookupKey(ex, dayName, originalIndex) || makeKey(ex?.name, dayName, originalIndex);
       if (justCompletedKey && k === justCompletedKey) return true;
       return logs?.[k]?.completed === true;
     });
@@ -1317,7 +1347,7 @@ export default function LivePage({ params }) {
     return visibleExercises.every(({ ex, originalIndex }) => {
       const disp = getExerciseDisplay(ex, activeWeek);
       if (!hasValue(disp?.name)) return true;
-      const k = makeKey(ex?.name, dayName, originalIndex); // ex è raw
+      const k = makeExerciseLookupKey(ex, dayName, originalIndex) || makeKey(ex?.name, dayName, originalIndex);
       return logs[k]?.completed === true;
     });
   }, [activeDay, activeWeek, logs, visibleExercises]);
