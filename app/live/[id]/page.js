@@ -271,6 +271,7 @@ function ExerciseItem({
       : "";
 
   const showFeedbackPills = !!fbPtRpe || !!fbRir;
+  const visiblePtNotes = currentLog && hasValue(currentLog.pt_notes) ? String(currentLog.pt_notes).trim() : "";
 
   return (
     <div className="rounded-3xl border border-slate-800 bg-slate-950/30 overflow-hidden">
@@ -381,6 +382,17 @@ function ExerciseItem({
               RPE PT: {fbPtRpe}
             </span>
           ) : null}
+
+          {visiblePtNotes ? (
+  <div className="px-4 pb-4 -mt-1">
+    <div className="rounded-2xl border border-fuchsia-800/25 bg-fuchsia-900/10 p-3">
+      <div className="text-[10px] font-black text-fuchsia-200 uppercase tracking-widest mb-2">
+        Note PT
+      </div>
+      <div className="text-sm text-slate-100 whitespace-pre-wrap break-words">{visiblePtNotes}</div>
+    </div>
+  </div>
+) : null}
 
           {fbRir ? (
             <span className="text-[10px] font-black text-amber-200 bg-amber-900/20 px-2 py-1 rounded-xl border border-amber-800/30">
@@ -1373,6 +1385,17 @@ export default function LivePage({ params }) {
                       <div className="text-lg font-black text-white">{String(lastModalLog.pt_metrics.rir)}</div>
                     </div>
                   ) : null}
+
+                  {hasValue(lastModalLog.pt_notes) ? (
+  <div className="mb-4 rounded-2xl border border-fuchsia-800/25 bg-fuchsia-900/10 p-3">
+    <div className="text-[10px] font-black text-fuchsia-200 uppercase tracking-widest mb-2">
+      Note PT
+    </div>
+    <div className="text-sm text-slate-100 whitespace-pre-wrap break-words">
+      {String(lastModalLog.pt_notes)}
+    </div>
+  </div>
+) : null}
 
                   <div className="text-xs text-slate-400 uppercase font-black mb-2">Serie registrate</div>
                   <div className="space-y-2">
