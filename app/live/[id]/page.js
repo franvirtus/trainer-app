@@ -272,7 +272,7 @@ function ExerciseItem({
 
   const showFeedbackPills = !!fbPtRpe || !!fbRir;
   const visiblePtNotes = currentLog && hasValue(currentLog.pt_notes) ? String(currentLog.pt_notes).trim() : "";
-
+  const visibleExerciseNotes = hasValue(ex?.notes) ? String(ex.notes).trim() : "";
   return (
     <div className="rounded-3xl border border-slate-800 bg-slate-950/30 overflow-hidden">
       <div className="p-4 border-b border-slate-800 flex items-start justify-between gap-3">
@@ -374,7 +374,18 @@ function ExerciseItem({
       <div className="px-4 pb-3">
         <TargetsBox rawEx={rawEx} activeWeek={activeWeek} />
       </div>
-
+      {visibleExerciseNotes ? (
+        <div className="px-4 pb-4 -mt-1">
+          <div className="rounded-2xl border border-amber-800/25 bg-amber-900/10 p-3">
+            <div className="text-[10px] font-black text-amber-200 uppercase tracking-widest mb-2">
+              Note esercizio
+            </div>
+            <div className="text-sm text-amber-50 whitespace-pre-wrap break-words">
+              {visibleExerciseNotes}
+            </div>
+          </div>
+        </div>
+      ) : null}
       {showFeedbackPills ? (
         <div className="px-4 pb-4 -mt-1 flex gap-2 flex-wrap">
           {fbPtRpe ? (
