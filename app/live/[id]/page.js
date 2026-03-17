@@ -38,6 +38,9 @@ const makeUidKey = (uid) => {
 const makeExerciseLookupKey = (rawEx, dayName, index = 0) =>
   makeUidKey(rawEx?.id) || makeKey(rawEx?.name, dayName, index);
 
+const makeDayIndexKey = (dayName, index = 0) =>
+  `${norm(dayName)}|${Number(index ?? 0)}`;
+
 const makeLogLookupKey = (log) =>
   makeUidKey(log?.exercise_uid) ||
   makeKey(log?.exercise_name, log?.day_label, log?.exercise_index);
@@ -286,6 +289,7 @@ function ExerciseItem({
   const keyStable = makeExerciseLookupKey(rawEx, activeDayName, exIndex);
   const keyLegacyRaw = makeKey(rawEx?.name, activeDayName, exIndex);
   const keyLegacyDisplayCurrent = makeKey(ex?.name, activeDayName, exIndex);
+  const keyDayIndex = makeDayIndexKey(activeDayName, exIndex);
 
   // ✅ key display della week precedente (compat per history: i vecchi log potrebbero avere quel nome)
   const prevDisp = activeWeek > 1 ? getExerciseDisplay(rawEx, activeWeek - 1) : null;
@@ -304,6 +308,7 @@ function ExerciseItem({
     historyLogs[keyLegacyRaw] ||
     (keyLegacyDisplayPrev ? historyLogs[keyLegacyDisplayPrev] : null) ||
     historyLogs[keyLegacyDisplayCurrent] ||
+    historyLogs[keyDayIndex] ||
     null;
 
   // ✅ la key usata per editing/confirm/advance deve essere sempre STABILE
@@ -963,6 +968,7 @@ export default function LivePage({ params }) {
         makeLogLookupKey(log),
         makeKey(log?.exercise_name_snapshot || log?.exercise_name, log?.day_label, log?.exercise_index),
         makeKey(log?.exercise_name, log?.day_label, log?.exercise_index),
+        makeDayIndexKey(log?.day_label, log?.exercise_index),
       ].filter(Boolean);
 
       keys.forEach((k) => {
@@ -1052,7 +1058,10 @@ export default function LivePage({ params }) {
         makeKey(rawEx?.name, dayName, exIndex);
       setEditingKey(keyStable);
 
-      const hist = historyLogs[keyStable] || historyLogs[makeKey(rawEx?.name, dayName, exIndex)];
+      const hist =
+        historyLogs[keyStable] ||
+        historyLogs[makeKey(rawEx?.name, dayName, exIndex)] ||
+        historyLogs[makeDayIndexKey(dayName, exIndex)];
 
       const initialNotes =
         String(existingData?.athlete_notes ?? "").trim() || String(hist?.athlete_notes ?? "").trim() || "";
@@ -1090,7 +1099,10 @@ export default function LivePage({ params }) {
       const keyStable =
         makeExerciseLookupKey(rawEx, dayName, exIndex) ||
         makeKey(rawEx?.name, dayName, exIndex);
-      const hist = historyLogs[keyStable] || historyLogs[makeKey(rawEx?.name, dayName, exIndex)];
+      const hist =
+        historyLogs[keyStable] ||
+        historyLogs[makeKey(rawEx?.name, dayName, exIndex)] ||
+        historyLogs[makeDayIndexKey(dayName, exIndex)];
       if (!hist) return;
       const parsed = parseSetData(hist.actual_reps, hist.actual_weight);
       setSetLogsData(parsed.length ? parsed : [{ reps: "", weight: "" }]);
