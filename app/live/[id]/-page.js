@@ -682,16 +682,13 @@ function GroupCard({
 /* ----------------------------- PAGE ----------------------------- */
 
 export default function LivePage({ params }) {
-  const resolvedParams = use(params);
-  const id = resolvedParams?.id;
+  const resolvedParams = use(params); // ✅ Aggiungi questo
+  const id = resolvedParams.id;       // ✅ Prendi l'id da qui
 
   // --- SUPABASE ---
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const supabase = useMemo(() => {
-    if (!supabaseUrl || !supabaseKey) return null;
-    return createClient(supabaseUrl, supabaseKey);
-  }, [supabaseUrl, supabaseKey]);
+  const supabase = useMemo(() => createClient(supabaseUrl, supabaseKey), [supabaseUrl, supabaseKey]);
 
   // --- STATE ---
   const [program, setProgram] = useState(null);
@@ -774,6 +771,9 @@ export default function LivePage({ params }) {
 
   /* ----------------------------- FETCH ----------------------------- */
 
+useEffect(() => {
+  if (id) fetchData();
+}, [id, fetchData]);
 
   const closeEdit = useCallback(() => {
     setEditingKey(null);
@@ -811,7 +811,7 @@ export default function LivePage({ params }) {
 
   const fetchWorkoutLogs = useCallback(async ({ programId, weekNumber = null }) => {
     if (!supabase) return [];
-
+    
     let query = supabase
       .from("workout_logs")
       .select("*")
@@ -831,6 +831,7 @@ export default function LivePage({ params }) {
     return Array.isArray(data) ? data : [];
   }, [supabase]);
 
+  
  const fetchData = useCallback(async () => {
   setLoading(true);
   setErrorMsg(null);
@@ -968,43 +969,6 @@ export default function LivePage({ params }) {
     setLoading(false);
   }
 }, [activeWeek, fetchWorkoutLogs, id, supabase, supabaseKey, supabaseUrl]);
-
-  const callLiveLogRoute = useCallback(async (body) => {
-    const response = await fetch("/api/live-log", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body ?? {}),
-    });
-
-    let json = null;
-    try {
-      json = await response.json();
-    } catch {
-      json = null;
-    }
-
-    if (!response.ok) {
-      return {
-        error: {
-          message:
-            json?.error?.message ||
-            json?.message ||
-            `HTTP ${response.status} durante la chiamata a /api/live-log`,
-        },
-        data: null,
-      };
-    }
-
-    return {
-      error: json?.error ?? null,
-      data: json?.data ?? json ?? null,
-    };
-  }, []);
-
-  useEffect(() => {
-    if (id) fetchData();
-  }, [id, fetchData]);
-
 
   /* ----------------------------- EDIT ----------------------------- */
 

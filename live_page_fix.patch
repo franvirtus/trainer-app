@@ -1,0 +1,110 @@
+--- /mnt/data/5c513022-44d1-41ef-bb66-3e0f15258da0.js	2026-03-17 12:25:18.981855834 +0000
++++ /mnt/data/live_page_fixed.js	2026-03-17 12:26:14.580407783 +0000
+@@ -682,14 +682,16 @@
+ /* ----------------------------- PAGE ----------------------------- */
+ 
+ export default function LivePage({ params }) {
+-  const resolvedParams = use(params); // ✅ Aggiungi questo
+-  const id = resolvedParams.id;       // ✅ Prendi l'id da qui
+-  const { id } = use(params);
++  const resolvedParams = use(params);
++  const id = resolvedParams?.id;
+ 
+   // --- SUPABASE ---
+   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+-  const supabase = useMemo(() => createClient(supabaseUrl, supabaseKey), [supabaseUrl, supabaseKey]);
++  const supabase = useMemo(() => {
++    if (!supabaseUrl || !supabaseKey) return null;
++    return createClient(supabaseUrl, supabaseKey);
++  }, [supabaseUrl, supabaseKey]);
+ 
+   // --- STATE ---
+   const [program, setProgram] = useState(null);
+@@ -772,9 +774,6 @@
+ 
+   /* ----------------------------- FETCH ----------------------------- */
+ 
+-useEffect(() => {
+-  if (id) fetchData();
+-}, [id, fetchData]);
+ 
+   const closeEdit = useCallback(() => {
+     setEditingKey(null);
+@@ -811,31 +810,8 @@
+   };
+ 
+   const fetchWorkoutLogs = useCallback(async ({ programId, weekNumber = null }) => {
+-  if (!supabase) return [];
+-
+-  let query = supabase
+-    .from("workout_logs")
+-    .select("*")
+-    .eq("program_id", programId);
+-
+-  if (weekNumber !== null) {
+-    query = query.eq("week_number", weekNumber);
+-  }
+-
+-  const { data, error } = await query.order("created_at", { ascending: true });
+-
+-  if (error) {
+-    console.error("Errore DB:", error);
+-    throw error;
+-  }
+-
+-  return Array.isArray(data) ? data : [];
+-}, [supabase]);
+-
+-  const fetchWorkoutLogs = useCallback(async ({ programId, weekNumber = null }) => {
+     if (!supabase) return [];
+-    
+-    // Inizializza la query
++
+     let query = supabase
+       .from("workout_logs")
+       .select("*")
+@@ -993,6 +969,43 @@
+   }
+ }, [activeWeek, fetchWorkoutLogs, id, supabase, supabaseKey, supabaseUrl]);
+ 
++  const callLiveLogRoute = useCallback(async (body) => {
++    const response = await fetch("/api/live-log", {
++      method: "POST",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify(body ?? {}),
++    });
++
++    let json = null;
++    try {
++      json = await response.json();
++    } catch {
++      json = null;
++    }
++
++    if (!response.ok) {
++      return {
++        error: {
++          message:
++            json?.error?.message ||
++            json?.message ||
++            `HTTP ${response.status} durante la chiamata a /api/live-log`,
++        },
++        data: null,
++      };
++    }
++
++    return {
++      error: json?.error ?? null,
++      data: json?.data ?? json ?? null,
++    };
++  }, []);
++
++  useEffect(() => {
++    if (id) fetchData();
++  }, [id, fetchData]);
++
++
+   /* ----------------------------- EDIT ----------------------------- */
+ 
+   const openEdit = useCallback(
