@@ -1113,7 +1113,8 @@ export default function LivePage({ params }) {
         makeKey(rawEx?.name, dayName, exIndex);
 
       const exDisplay = getExerciseDisplay(rawEx, activeWeek);
-      const exName = String(exDisplay?.name || rawEx?.name || "").trim();
+      const stableExerciseName = String(rawEx?.name || exDisplay?.name || "").trim();
+      const snapshotExerciseName = String(exDisplay?.name || rawEx?.name || "").trim();
 
       const normalized = setLogsData.map((s) => ({
         reps: String(s?.reps ?? "").trim(),
@@ -1131,8 +1132,8 @@ export default function LivePage({ params }) {
       const payload = {
         program_id: id,
         exercise_uid: rawEx?.id || null,
-        exercise_name_snapshot: exName,
-        exercise_name: exName,
+        exercise_name_snapshot: snapshotExerciseName,
+        exercise_name: stableExerciseName,
         week_number: activeWeek,
         day_label: dayName,
         exercise_index: exIndex,
@@ -1171,7 +1172,8 @@ export default function LivePage({ params }) {
         makeKey(rawEx?.name, dayName, exIndex);
 
       const exDisplay = getExerciseDisplay(rawEx, activeWeek);
-      const exName = String(exDisplay?.name || rawEx?.name || "").trim();
+      const stableExerciseName = String(rawEx?.name || exDisplay?.name || "").trim();
+      const snapshotExerciseName = String(exDisplay?.name || rawEx?.name || "").trim();
       const current = logs[key];
 
       closeEdit();
@@ -1223,8 +1225,8 @@ export default function LivePage({ params }) {
         const basePayload = {
           program_id: id,
           exercise_uid: rawEx?.id || null,
-          exercise_name_snapshot: exName,
-          exercise_name: exName,
+          exercise_name_snapshot: snapshotExerciseName,
+          exercise_name: stableExerciseName,
           week_number: activeWeek,
           day_label: dayName,
           exercise_index: exIndex,
