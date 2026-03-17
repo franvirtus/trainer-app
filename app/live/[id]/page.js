@@ -770,10 +770,9 @@ export default function LivePage({ params }) {
 
   /* ----------------------------- FETCH ----------------------------- */
 
-  useEffect(() => {
-    if (id) fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, activeWeek]);
+useEffect(() => {
+  if (id) fetchData();
+}, [id, fetchData]);
 
   const closeEdit = useCallback(() => {
     setEditingKey(null);
@@ -843,31 +842,49 @@ export default function LivePage({ params }) {
     return { data: json?.data ?? null, error: null };
   }, []);
 
-  const fetchData = async () => {
-    setLoading(true);
-    setErrorMsg(null);
+ const fetchData = useCallback(async () => {
+  setLoading(true);
+  setErrorMsg(null);
 
-    const { data: prog, error } = await supabase.from("programs").select("*").eq("id", id).single();
-
-    if (error || !prog) {
-      setErrorMsg("Scheda non trovata o eliminata.");
-      setLoading(false);
-      return;
+  try {
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error("Variabili ambiente Supabase mancanti lato client.");
     }
 
-    if (!prog.days_structure || !Array.isArray(prog.days_structure)) prog.days_structure = [];
-    setProgram(prog);
+    const { data: prog, error: progError } = await supabase
+      .from("programs")
+      .select("*")
+      .eq("id", id)
+      .single();
 
-    if (prog.client_id) {
-      const { data: client } = await supabase
+    if (progError || !prog) {
+      throw new Error("Scheda non trovata o eliminata.");
+    }
+
+    const safeProg = {
+      ...prog,
+      days_structure: Array.isArray(prog.days_structure) ? prog.days_structure : [],
+    };
+
+    setProgram(safeProg);
+
+    if (safeProg.client_id) {
+      const { data: client, error: clientError } = await supabase
         .from("clients")
         .select("full_name")
-        .eq("id", prog.client_id)
+        .eq("id", safeProg.client_id)
         .single();
-      if (client?.full_name) setClientName(client.full_name);
+
+      if (!clientError && client?.full_name) {
+        setClientName(client.full_name);
+      } else {
+        setClientName("");
+      }
+    } else {
+      setClientName("");
     }
 
-    // ✅ auto-pick: prima settimana non completata (una sola volta)
+    // auto-pick settimana solo al primo load
     if (!didAutoPickWeekRef.current) {
       didAutoPickWeekRef.current = true;
 
@@ -877,13 +894,11 @@ export default function LivePage({ params }) {
       (allLogs || []).forEach((log) => {
         const w = Number(log.week_number) || 1;
         if (!byWeek[w]) byWeek[w] = {};
+
         const exIdx = Number(log.exercise_index);
         if (!Number.isInteger(exIdx) || exIdx < 0) return;
 
-        // NB: qui non abbiamo raw.name, quindi usiamo la chiave come salvata nel DB.
-        // La completezza è “best effort” storica, ma almeno non collassa su 0.
         const k = makeLogLookupKey(log);
-
         byWeek[w][k] = {
           ...log,
           athlete_notes: log.athlete_notes ?? "",
@@ -892,13 +907,10 @@ export default function LivePage({ params }) {
         };
       });
 
-      const dur = Number(prog.duration) || 4;
+      const dur = Number(safeProg.duration) || 4;
       let pick = dur;
+
       for (let w = 1; w <= dur; w++) {
-        // computeWeekComplete usa raw.name, byWeek usa log.exercise_name → potrebbe non matchare
-        // quindi qui non la usiamo per auto-pick "perfetto". Teniamo logica semplice: se non hai log week w, pick w.
-        // Per non introdurre altri bug, auto-pick diventa conservativo.
-        // Se vuoi l'auto-pick accurato al 100%, serve salvare exercise_id o stable_key in DB.
         const hasAny = !!Object.keys(byWeek[w] || {}).length;
         if (!hasAny) {
           pick = w;
@@ -908,57 +920,65 @@ export default function LivePage({ params }) {
 
       if (pick !== activeWeek) {
         setActiveWeek(pick);
-        setLoading(false);
         return;
       }
     }
 
-    // logs settimana attiva
-    const savedLogs = await fetchWorkoutLogs({ programId: id, weekNumber: activeWeek });
+    const savedLogs = await fetchWorkoutLogs({
+      programId: id,
+      weekNumber: activeWeek,
+    });
 
     const logsMap = {};
-    if (savedLogs?.length) {
-      savedLogs.forEach((log) => {
+    (savedLogs || []).forEach((log) => {
+      const exIdx = Number(log.exercise_index);
+      if (!Number.isInteger(exIdx) || exIdx < 0) return;
+
+      const k = makeLogLookupKey(log);
+      logsMap[k] = {
+        ...log,
+        athlete_notes: log.athlete_notes ?? "",
+        athlete_metrics: log.athlete_metrics ?? {},
+        rpe: log.rpe ?? null,
+      };
+    });
+    setLogs(logsMap);
+
+    if (activeWeek > 1) {
+      const prevLogs = await fetchWorkoutLogs({
+        programId: id,
+        weekNumber: activeWeek - 1,
+      });
+
+      const historyMap = {};
+      (prevLogs || []).forEach((log) => {
         const exIdx = Number(log.exercise_index);
         if (!Number.isInteger(exIdx) || exIdx < 0) return;
 
         const k = makeLogLookupKey(log);
-        logsMap[k] = {
+        historyMap[k] = {
           ...log,
           athlete_notes: log.athlete_notes ?? "",
           athlete_metrics: log.athlete_metrics ?? {},
           rpe: log.rpe ?? null,
         };
       });
-    }
-    setLogs(logsMap);
 
-    // history settimana precedente
-    if (activeWeek > 1) {
-      const prevLogs = await fetchWorkoutLogs({ programId: id, weekNumber: activeWeek - 1 });
-
-      const historyMap = {};
-      if (prevLogs?.length) {
-        prevLogs.forEach((log) => {
-          const exIdx = Number(log.exercise_index);
-          if (!Number.isInteger(exIdx) || exIdx < 0) return;
-
-          const k = makeLogLookupKey(log);
-          historyMap[k] = {
-            ...log,
-            athlete_notes: log.athlete_notes ?? "",
-            athlete_metrics: log.athlete_metrics ?? {},
-            rpe: log.rpe ?? null,
-          };
-        });
-      }
       setHistoryLogs(historyMap);
     } else {
       setHistoryLogs({});
     }
-
+  } catch (err) {
+    console.error("[live page fetchData] error:", err);
+    setProgram(null);
+    setClientName("");
+    setLogs({});
+    setHistoryLogs({});
+    setErrorMsg(err?.message || "Errore caricamento scheda.");
+  } finally {
     setLoading(false);
-  };
+  }
+}, [activeWeek, fetchWorkoutLogs, id, supabase, supabaseKey, supabaseUrl]);
 
   /* ----------------------------- EDIT ----------------------------- */
 
