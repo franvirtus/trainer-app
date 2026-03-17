@@ -30,6 +30,14 @@ const norm = (s) => String(s ?? "").trim().toLowerCase();
 const makeKey = (exName, dayName, index = 0) =>
   `${norm(exName)}|${norm(dayName)}|${Number(index ?? 0)}`;
 
+const makeNameDayKey = (exName, dayName) =>
+  `${norm(exName)}|${norm(dayName)}`;
+
+const hasValidIndex = (val) => Number.isInteger(Number(val)) && Number(val) >= 0;
+
+const makeDayIndexKey = (dayName, index = 0) =>
+  `${norm(dayName)}|${Number(index ?? 0)}`;
+
 const makeUidKey = (uid) => {
   const t = String(uid ?? "").trim();
   return t ? `uid:${t}` : "";
@@ -37,9 +45,6 @@ const makeUidKey = (uid) => {
 
 const makeExerciseLookupKey = (rawEx, dayName, index = 0) =>
   makeUidKey(rawEx?.id) || makeKey(rawEx?.name, dayName, index);
-
-const makeDayIndexKey = (dayName, index = 0) =>
-  `${norm(dayName)}|${Number(index ?? 0)}`;
 
 const makeLogLookupKey = (log) =>
   makeUidKey(log?.exercise_uid) ||
@@ -290,16 +295,22 @@ function ExerciseItem({
   const keyLegacyRaw = makeKey(rawEx?.name, activeDayName, exIndex);
   const keyLegacyDisplayCurrent = makeKey(ex?.name, activeDayName, exIndex);
   const keyDayIndex = makeDayIndexKey(activeDayName, exIndex);
+  const keyNameDayRaw = makeNameDayKey(rawEx?.name, activeDayName);
+  const keyNameDayCurrent = makeNameDayKey(ex?.name, activeDayName);
 
   // ✅ key display della week precedente (compat per history: i vecchi log potrebbero avere quel nome)
   const prevDisp = activeWeek > 1 ? getExerciseDisplay(rawEx, activeWeek - 1) : null;
   const keyLegacyDisplayPrev = prevDisp?.name ? makeKey(prevDisp.name, activeDayName, exIndex) : null;
+  const keyNameDayPrev = prevDisp?.name ? makeNameDayKey(prevDisp.name, activeDayName) : null;
 
   // ✅ lookup robusto (attuale)
   const currentLog =
     logs[keyStable] ||
     logs[keyLegacyRaw] ||
     logs[keyLegacyDisplayCurrent] ||
+    logs[keyDayIndex] ||
+    logs[keyNameDayRaw] ||
+    logs[keyNameDayCurrent] ||
     null;
 
   // ✅ lookup robusto (history)
@@ -309,6 +320,9 @@ function ExerciseItem({
     (keyLegacyDisplayPrev ? historyLogs[keyLegacyDisplayPrev] : null) ||
     historyLogs[keyLegacyDisplayCurrent] ||
     historyLogs[keyDayIndex] ||
+    historyLogs[keyNameDayRaw] ||
+    (keyNameDayPrev ? historyLogs[keyNameDayPrev] : null) ||
+    historyLogs[keyNameDayCurrent] ||
     null;
 
   // ✅ la key usata per editing/confirm/advance deve essere sempre STABILE
@@ -895,15 +909,26 @@ export default function LivePage({ params }) {
         if (!byWeek[w]) byWeek[w] = {};
 
         const exIdx = Number(log.exercise_index);
-        if (!Number.isInteger(exIdx) || exIdx < 0) return;
 
-        const k = makeLogLookupKey(log);
-        byWeek[w][k] = {
+        const keys = [
+          hasValidIndex(log.exercise_index) ? makeLogLookupKey(log) : null,
+          hasValidIndex(log.exercise_index) ? makeDayIndexKey(log?.day_label, log?.exercise_index) : null,
+          hasValidIndex(log.exercise_index) ? makeKey(log?.exercise_name_snapshot || log?.exercise_name, log?.day_label, log?.exercise_index) : null,
+          hasValidIndex(log.exercise_index) ? makeKey(log?.exercise_name, log?.day_label, log?.exercise_index) : null,
+          makeNameDayKey(log?.exercise_name_snapshot || log?.exercise_name, log?.day_label),
+          makeNameDayKey(log?.exercise_name, log?.day_label),
+        ].filter(Boolean);
+
+        const normalized = {
           ...log,
           athlete_notes: log.athlete_notes ?? "",
           athlete_metrics: log.athlete_metrics ?? {},
           rpe: log.rpe ?? null,
         };
+
+        keys.forEach((k) => {
+          byWeek[w][k] = normalized;
+        });
       });
 
       const dur = Number(safeProg.duration) || 4;
@@ -930,16 +955,25 @@ export default function LivePage({ params }) {
 
     const logsMap = {};
     (savedLogs || []).forEach((log) => {
-      const exIdx = Number(log.exercise_index);
-      if (!Number.isInteger(exIdx) || exIdx < 0) return;
-
-      const k = makeLogLookupKey(log);
-      logsMap[k] = {
+      const normalizedLog = {
         ...log,
         athlete_notes: log.athlete_notes ?? "",
         athlete_metrics: log.athlete_metrics ?? {},
         rpe: log.rpe ?? null,
       };
+
+      const keys = [
+        hasValidIndex(log.exercise_index) ? makeLogLookupKey(log) : null,
+        hasValidIndex(log.exercise_index) ? makeDayIndexKey(log?.day_label, log?.exercise_index) : null,
+        hasValidIndex(log.exercise_index) ? makeKey(log?.exercise_name_snapshot || log?.exercise_name, log?.day_label, log?.exercise_index) : null,
+        hasValidIndex(log.exercise_index) ? makeKey(log?.exercise_name, log?.day_label, log?.exercise_index) : null,
+        makeNameDayKey(log?.exercise_name_snapshot || log?.exercise_name, log?.day_label),
+        makeNameDayKey(log?.exercise_name, log?.day_label),
+      ].filter(Boolean);
+
+      keys.forEach((k) => {
+        logsMap[k] = normalizedLog;
+      });
     });
     setLogs(logsMap);
 
@@ -954,9 +988,6 @@ export default function LivePage({ params }) {
   (allPreviousLogs || [])
     .filter((log) => Number(log.week_number || 0) < Number(activeWeek || 0))
     .forEach((log) => {
-      const exIdx = Number(log.exercise_index);
-      if (!Number.isInteger(exIdx) || exIdx < 0) return;
-
       const normalizedLog = {
         ...log,
         athlete_notes: log.athlete_notes ?? "",
@@ -965,10 +996,12 @@ export default function LivePage({ params }) {
       };
 
       const keys = [
-        makeLogLookupKey(log),
-        makeKey(log?.exercise_name_snapshot || log?.exercise_name, log?.day_label, log?.exercise_index),
-        makeKey(log?.exercise_name, log?.day_label, log?.exercise_index),
-        makeDayIndexKey(log?.day_label, log?.exercise_index),
+        hasValidIndex(log.exercise_index) ? makeLogLookupKey(log) : null,
+        hasValidIndex(log.exercise_index) ? makeDayIndexKey(log?.day_label, log?.exercise_index) : null,
+        hasValidIndex(log.exercise_index) ? makeKey(log?.exercise_name_snapshot || log?.exercise_name, log?.day_label, log?.exercise_index) : null,
+        hasValidIndex(log.exercise_index) ? makeKey(log?.exercise_name, log?.day_label, log?.exercise_index) : null,
+        makeNameDayKey(log?.exercise_name_snapshot || log?.exercise_name, log?.day_label),
+        makeNameDayKey(log?.exercise_name, log?.day_label),
       ].filter(Boolean);
 
       keys.forEach((k) => {
@@ -1061,7 +1094,8 @@ export default function LivePage({ params }) {
       const hist =
         historyLogs[keyStable] ||
         historyLogs[makeKey(rawEx?.name, dayName, exIndex)] ||
-        historyLogs[makeDayIndexKey(dayName, exIndex)];
+        historyLogs[makeDayIndexKey(dayName, exIndex)] ||
+        historyLogs[makeNameDayKey(rawEx?.name, dayName)];
 
       const initialNotes =
         String(existingData?.athlete_notes ?? "").trim() || String(hist?.athlete_notes ?? "").trim() || "";
@@ -1102,7 +1136,8 @@ export default function LivePage({ params }) {
       const hist =
         historyLogs[keyStable] ||
         historyLogs[makeKey(rawEx?.name, dayName, exIndex)] ||
-        historyLogs[makeDayIndexKey(dayName, exIndex)];
+        historyLogs[makeDayIndexKey(dayName, exIndex)] ||
+        historyLogs[makeNameDayKey(rawEx?.name, dayName)];
       if (!hist) return;
       const parsed = parseSetData(hist.actual_reps, hist.actual_weight);
       setSetLogsData(parsed.length ? parsed : [{ reps: "", weight: "" }]);
