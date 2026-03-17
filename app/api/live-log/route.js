@@ -159,11 +159,14 @@ export async function POST(request) {
     }
 
     return NextResponse.json({ error: `Unsupported mode: ${mode}` }, { status: 400 });
-  } catch (err) {
-    console.error("[/api/live-log] error:", err);
-    return NextResponse.json(
-      { error: err?.message || "Unexpected error in /api/live-log" },
-      { status: 500 }
-    );
-  }
+} catch (err) {
+  console.error("[/api/live-log] message:", err?.message);
+  console.error("[/api/live-log] stack:", err?.stack);
+  console.error("[/api/live-log] full:", err);
+
+  return NextResponse.json(
+    { error: err?.message || "Unexpected error in /api/live-log" },
+    { status: 500 }
+  );
+}
 }

@@ -50,11 +50,14 @@ export async function GET(request) {
     }
 
     return NextResponse.json({ data: data || [] });
-  } catch (err) {
-    console.error("[/api/live-log-read] error:", err);
-    return NextResponse.json(
-      { error: err?.message || "Unexpected error in /api/live-log-read" },
-      { status: 500 }
-    );
-  }
+} catch (err) {
+  console.error("[/api/live-log-read] message:", err?.message);
+  console.error("[/api/live-log-read] stack:", err?.stack);
+  console.error("[/api/live-log-read] full:", err);
+
+  return NextResponse.json(
+    { error: err?.message || "Unexpected error in /api/live-log-read" },
+    { status: 500 }
+  );
+}
 }
