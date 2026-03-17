@@ -934,29 +934,60 @@ export default function LivePage({ params }) {
     setLogs(logsMap);
 
     if (activeWeek > 1) {
-      const prevLogs = await fetchWorkoutLogs({
-        programId: id,
-        weekNumber: activeWeek - 1,
+  const allPreviousLogs = await fetchWorkoutLogs({
+    programId: id,
+    weekNumber: null,
+  });
+
+  const historyMap = {};
+
+  (allPreviousLogs || [])
+    .filter((log) => Number(log.week_number || 0) < Number(activeWeek || 0))
+    .forEach((log) => {
+      const exIdx = Number(log.exercise_index);
+      if (!Number.isInteger(exIdx) || exIdx < 0) return;
+
+      const normalizedLog = {
+        ...log,
+        athlete_notes: log.athlete_notes ?? "",
+        athlete_metrics: log.athlete_metrics ?? {},
+        rpe: log.rpe ?? null,
+      };
+
+      const keys = [
+        makeLogLookupKey(log),
+        makeKey(log?.exercise_name_snapshot || log?.exercise_name, log?.day_label, log?.exercise_index),
+        makeKey(log?.exercise_name, log?.day_label, log?.exercise_index),
+      ].filter(Boolean);
+
+      keys.forEach((k) => {
+        const existing = historyMap[k];
+
+        if (!existing) {
+          historyMap[k] = normalizedLog;
+          return;
+        }
+
+        const existingWeek = Number(existing.week_number || 0);
+        const currentWeek = Number(normalizedLog.week_number || 0);
+
+        const existingCreated = new Date(existing.created_at || 0).getTime();
+        const currentCreated = new Date(normalizedLog.created_at || 0).getTime();
+
+        const shouldReplace =
+          currentWeek > existingWeek ||
+          (currentWeek === existingWeek && currentCreated > existingCreated);
+
+        if (shouldReplace) {
+          historyMap[k] = normalizedLog;
+        }
       });
+    });
 
-      const historyMap = {};
-      (prevLogs || []).forEach((log) => {
-        const exIdx = Number(log.exercise_index);
-        if (!Number.isInteger(exIdx) || exIdx < 0) return;
-
-        const k = makeLogLookupKey(log);
-        historyMap[k] = {
-          ...log,
-          athlete_notes: log.athlete_notes ?? "",
-          athlete_metrics: log.athlete_metrics ?? {},
-          rpe: log.rpe ?? null,
-        };
-      });
-
-      setHistoryLogs(historyMap);
-    } else {
-      setHistoryLogs({});
-    }
+  setHistoryLogs(historyMap);
+} else {
+  setHistoryLogs({});
+}
   } catch (err) {
     console.error("[live page fetchData] error:", err);
     setProgram(null);
