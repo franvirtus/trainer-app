@@ -55,8 +55,28 @@ const ensureObj = (x) => (x && typeof x === "object" ? x : {});
 const getExerciseDisplay = (ex, activeWeek) => {
   if (!ex) return ex;
   if (activeWeek === 1 || !ex?.progression) return ex;
+
   const override = ex.progression?.[activeWeek] || ex.progression?.[String(activeWeek)];
-  return override ? { ...ex, ...override } : ex;
+  if (!override) return ex;
+
+  const basePt =
+    ex?.pt_metrics && typeof ex.pt_metrics === "object" && !Array.isArray(ex.pt_metrics)
+      ? ex.pt_metrics
+      : {};
+
+  const overridePt =
+    override?.pt_metrics && typeof override.pt_metrics === "object" && !Array.isArray(override.pt_metrics)
+      ? override.pt_metrics
+      : {};
+
+  return {
+    ...ex,
+    ...override,
+    pt_metrics: {
+      ...basePt,
+      ...overridePt,
+    },
+  };
 };
 
 const getDayNotesDisplay = (day, activeWeek) => {
@@ -88,6 +108,23 @@ const safeObjFromRows = (rows) => {
   return out;
 };
 
+const sanitizeAthleteWorkoutPayload = (payload) => ({
+  program_id: payload.program_id,
+  exercise_uid: payload.exercise_uid ?? null,
+  exercise_name_snapshot: payload.exercise_name_snapshot ?? payload.exercise_name ?? null,
+  exercise_name: payload.exercise_name,
+  week_number: payload.week_number,
+  day_label: payload.day_label,
+  exercise_index: payload.exercise_index,
+  actual_sets: payload.actual_sets ?? "0",
+  actual_reps: payload.actual_reps ?? "",
+  actual_weight: payload.actual_weight ?? "",
+  athlete_notes: payload.athlete_notes ?? "",
+  athlete_metrics: payload.athlete_metrics ?? {},
+  completed: Boolean(payload.completed),
+  rpe: payload.rpe ?? null,
+});
+
 const rowsFromObj = (obj) => {
   if (!obj || typeof obj !== "object") return [{ k: "", v: "" }];
   const entries = Object.entries(obj);
@@ -100,13 +137,7 @@ const isLogEmpty = (log) => {
   const r = String(log?.actual_reps ?? "").trim();
   const w = String(log?.actual_weight ?? "").trim();
   const nA = String(log?.athlete_notes ?? "").trim();
-
-  const nP = String(log?.pt_notes ?? "").trim();
-  const rpeP = log?.pt_rpe;
-  const mP = log?.pt_metrics && typeof log.pt_metrics === "object" ? Object.keys(log.pt_metrics).length : 0;
-
-  const rpePEmpty = rpeP === null || rpeP === undefined || String(rpeP).trim() === "";
-  return !r && !w && !nA && !nP && rpePEmpty && !mP;
+  return !r && !w && !nA;
 };
 
 // ✅ Build groups ma preserva l’indice originale (fondamentale per key log)
@@ -185,18 +216,34 @@ function TargetsBox({ rawEx, activeWeek }) {
         </div>
       ) : null}
 
-      {extras.length ? (
-        <div className="grid grid-cols-2 gap-2 mt-2">
-          {extras.map(([k, v]) => (
-            <div key={String(k)} className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2">
-              <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest truncate">
-                {String(k)}
-              </div>
-              <div className="text-sm font-black text-white truncate">{String(v)}</div>
-            </div>
-          ))}
+{extras.length ? (
+  <div className="mt-3 flex flex-wrap gap-2">
+    {extras
+      .flatMap(([k, v]) => [k, v])
+      .filter((item) => String(item ?? "").trim() !== "")
+      .map((item) => String(item).trim())
+      .sort((a, b) => {
+        const ma = a.match(/^extra\s*(\d+)/i);
+        const mb = b.match(/^extra\s*(\d+)/i);
+
+        if (ma && mb) return Number(ma[1]) - Number(mb[1]);
+        if (ma) return -1;
+        if (mb) return 1;
+
+        return a.localeCompare(b, "it", { numeric: true, sensitivity: "base" });
+      })
+      .map((item, idx) => (
+        <div
+          key={`${item}_${idx}`}
+          className="inline-flex w-fit max-w-full items-center rounded-full border border-slate-700 bg-slate-950 px-3 py-2"
+        >
+          <span className="text-sm font-black text-white break-words leading-none">
+            {item}
+          </span>
         </div>
-      ) : null}
+      ))}
+  </div>
+) : null}
     </div>
   );
 }
@@ -218,14 +265,7 @@ function ExerciseItem({
 
   setLogsData,
   noteInput,
-  ptRpeInput,
-  ptNoteInput,
-  ptMetricsRows,
-
   setNoteInput,
-  setPtRpeInput,
-  setPtNoteInput,
-  setPtMetricsRows,
 
   openLastModal,
   closeEdit,
@@ -277,17 +317,6 @@ function ExerciseItem({
 
   const hasSomeSavedData = currentLog && !isLogEmpty(currentLog);
 
-  // ✅ Feedback PT (dal LOG): una sola volta, solo se valorizzati
-  const fbPtRpe = currentLog && hasValue(currentLog.pt_rpe) ? String(currentLog.pt_rpe) : "";
-  const fbRir =
-    currentLog?.pt_metrics &&
-    typeof currentLog.pt_metrics === "object" &&
-    hasValue(currentLog.pt_metrics.rir)
-      ? String(currentLog.pt_metrics.rir)
-      : "";
-
-  const showFeedbackPills = !!fbPtRpe || !!fbRir;
-  const visiblePtNotes = currentLog && hasValue(currentLog.pt_notes) ? String(currentLog.pt_notes).trim() : "";
   const visibleExerciseNotes = hasValue(ex?.notes) ? String(ex.notes).trim() : "";
   return (
     <div className="rounded-3xl border border-slate-800 bg-slate-950/30 overflow-hidden">
@@ -387,9 +416,8 @@ function ExerciseItem({
         );
       })()}
 
-      <div className="px-4 pb-3">
-        <TargetsBox rawEx={rawEx} activeWeek={activeWeek} />
-      </div>
+      <TargetsBox rawEx={rawEx} activeWeek={activeWeek} />
+
       {visibleExerciseNotes ? (
         <div className="px-4 pb-4 -mt-1">
           <div className="rounded-2xl border border-amber-800/25 bg-amber-900/10 p-3">
@@ -399,32 +427,6 @@ function ExerciseItem({
             <div className="text-sm text-amber-50 whitespace-pre-wrap break-words">
               {visibleExerciseNotes}
             </div>
-          </div>
-        </div>
-      ) : null}
-      {showFeedbackPills ? (
-        <div className="px-4 pb-4 -mt-1 flex gap-2 flex-wrap">
-          {fbPtRpe ? (
-            <span className="text-[10px] font-black text-fuchsia-200 bg-fuchsia-900/20 px-2 py-1 rounded-xl border border-fuchsia-800/30">
-              RPE PT: {fbPtRpe}
-            </span>
-          ) : null}
-
-          {fbRir ? (
-            <span className="text-[10px] font-black text-amber-200 bg-amber-900/20 px-2 py-1 rounded-xl border border-amber-800/30">
-              RIR: {fbRir}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-
-      {visiblePtNotes ? (
-        <div className="px-4 pb-4 -mt-1">
-          <div className="rounded-2xl border border-fuchsia-800/25 bg-fuchsia-900/10 p-3">
-            <div className="text-[10px] font-black text-fuchsia-200 uppercase tracking-widest mb-2">
-              Note PT
-            </div>
-            <div className="text-sm text-slate-100 whitespace-pre-wrap break-words">{visiblePtNotes}</div>
           </div>
         </div>
       ) : null}
@@ -516,96 +518,6 @@ function ExerciseItem({
           />
 
           {/* PT feedback */}
-          <div className="mt-4 rounded-3xl border border-fuchsia-800/25 bg-fuchsia-900/10 p-4">
-            <div className="text-[10px] font-black text-fuchsia-200 uppercase tracking-widest mb-2">
-              PT (feedback)
-            </div>
-
-            <div className="mb-3">
-              <div className="text-[10px] font-black text-fuchsia-200 uppercase tracking-widest mb-2">
-                RPE PT (0-10)
-              </div>
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="Es. 8"
-                value={ptRpeInput}
-                onChange={(e) => setPtRpeInput(e.target.value)}
-                className="caret-white w-full h-12 bg-slate-950 border border-slate-700 rounded-2xl px-4 text-white font-black text-lg outline-none
-                           focus:border-fuchsia-500 focus:ring-1 ring-fuchsia-500/20 placeholder:text-white/20 hover:border-slate-600 transition"
-              />
-            </div>
-
-            <textarea
-              placeholder="Note PT..."
-              value={ptNoteInput}
-              onChange={(e) => setPtNoteInput(e.target.value)}
-              className={
-                "w-full bg-slate-950 border border-slate-700 rounded-2xl p-3 text-sm text-white outline-none " +
-                "focus:border-fuchsia-500 focus:ring-1 ring-fuchsia-500/20 placeholder:text-white/20 resize-none min-h-[72px]"
-              }
-              rows={2}
-            />
-
-            <div className="mt-3">
-              <div className="text-[10px] font-black text-fuchsia-200 uppercase tracking-widest mb-2">
-                PARAMETRI EXTRA (chiave / valore)
-              </div>
-
-              <div className="space-y-2">
-                {ptMetricsRows.map((row, i) => (
-                  <div key={i} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] gap-2">
-                    <input
-                      value={row.k}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setPtMetricsRows((prev) => {
-                          const copy = [...prev];
-                          copy[i] = { ...copy[i], k: val };
-                          if (i === copy.length - 1 && (val.trim() || copy[i].v.trim())) {
-                            copy.push({ k: "", v: "" });
-                          }
-                          return copy;
-                        });
-                      }}
-                      placeholder="es. rir"
-                      className="min-w-0 w-full h-11 bg-slate-950 border border-slate-700 rounded-2xl px-3 text-sm text-white font-black outline-none focus:border-fuchsia-500"
-                    />
-                    <input
-                      value={row.v}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setPtMetricsRows((prev) => {
-                          const copy = [...prev];
-                          copy[i] = { ...copy[i], v: val };
-                          if (i === copy.length - 1 && (copy[i].k.trim() || val.trim())) {
-                            copy.push({ k: "", v: "" });
-                          }
-                          return copy;
-                        });
-                      }}
-                      placeholder="es. 2"
-                      className="min-w-0 w-full h-11 bg-slate-950 border border-slate-700 rounded-2xl px-3 text-sm text-white font-black outline-none focus:border-fuchsia-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPtMetricsRows((prev) => {
-                          const copy = prev.filter((_, idx) => idx !== i);
-                          return copy.length ? copy : [{ k: "", v: "" }];
-                        });
-                      }}
-                      className="h-11 rounded-2xl border border-slate-800 bg-slate-950 hover:bg-slate-900 text-slate-300 hover:text-red-300 transition flex items-center justify-center"
-                      title="Rimuovi riga"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
           <button
             onClick={() => saveEntry(rawEx, activeDayName, exIndex)}
             className="mt-4 w-full bg-blue-600 text-white font-black py-3 rounded-2xl flex justify-center items-center gap-2 hover:bg-blue-500 active:scale-[0.99] transition"
@@ -616,6 +528,63 @@ function ExerciseItem({
         </div>
       ) : (
         <div className="p-4 bg-slate-950/20">
+          {hasSomeSavedData ? (
+            <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-950/80 p-3">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  Log inserito
+                </div>
+                {currentLog?.completed === true ? (
+                  <span className="text-[10px] font-black text-emerald-200 bg-emerald-900/20 px-2.5 py-1 rounded-xl border border-emerald-800/30">
+                    COMPLETATO
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-black text-amber-200 bg-amber-900/20 px-2.5 py-1 rounded-xl border border-amber-800/30">
+                    NON COMPLETATO
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <div className="grid grid-cols-[52px_1fr_1fr] gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">
+                  <div>Set</div>
+                  <div className="text-center">Reps</div>
+                  <div className="text-center">Kg</div>
+                </div>
+
+                {parseSetData(currentLog?.actual_reps, currentLog?.actual_weight).map((row, idx) => (
+                  <div
+                    key={`${key}_saved_${idx}`}
+                    className="grid grid-cols-[52px_1fr_1fr] gap-2 items-center rounded-xl border border-slate-800 bg-slate-900 px-3 py-2"
+                  >
+                    <div className="text-sm font-black text-slate-300">#{idx + 1}</div>
+                    <div className="text-base font-black text-white text-center break-words">
+                      {String(row.reps || "-")}
+                    </div>
+                    <div className="text-base font-black text-emerald-300 text-center break-words">
+                      {String(row.weight || "-")}
+                    </div>
+                  </div>
+                ))}
+
+                <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">
+                  Serie dichiarate: {String(currentLog?.actual_sets ?? "-")}
+                </div>
+              </div>
+
+              {String(currentLog?.athlete_notes ?? "").trim() ? (
+                <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2">
+                  <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">
+                    Note atleta
+                  </div>
+                  <div className="text-sm text-slate-200 whitespace-pre-wrap break-words">
+                    {String(currentLog.athlete_notes)}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <button
             onClick={() => openEdit(rawEx, activeDayName, exIndex, currentLog)}
             className={`w-full py-3 rounded-2xl font-black transition border ${
@@ -741,10 +710,6 @@ export default function LivePage({ params }) {
   // note atleta
   const [noteInput, setNoteInput] = useState("");
 
-  // PT fields (feedback)
-  const [ptRpeInput, setPtRpeInput] = useState("");
-  const [ptNoteInput, setPtNoteInput] = useState("");
-  const [ptMetricsRows, setPtMetricsRows] = useState([{ k: "", v: "" }]);
 
   // review
   const [reviewMode, setReviewMode] = useState(false);
@@ -814,9 +779,6 @@ export default function LivePage({ params }) {
     setEditingKey(null);
     setSetLogsData([{ reps: "", weight: "" }]);
     setNoteInput("");
-    setPtNoteInput("");
-    setPtRpeInput("");
-    setPtMetricsRows([{ k: "", v: "" }]);
   }, []);
 
   useEffect(() => {
@@ -847,6 +809,40 @@ export default function LivePage({ params }) {
     return true;
   };
 
+  const fetchWorkoutLogs = useCallback(async ({ programId, weekNumber = null }) => {
+    const params = new URLSearchParams({ programId: String(programId) });
+    if (weekNumber !== null && weekNumber !== undefined) {
+      params.set("weekNumber", String(weekNumber));
+    }
+
+    const res = await fetch(`/api/live-log-read?${params.toString()}`, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(String(json?.error || "Errore lettura workout_logs"));
+    }
+
+    return Array.isArray(json?.data) ? json.data : [];
+  }, []);
+
+  const callLiveLogRoute = useCallback(async (body) => {
+    const res = await fetch("/api/live-log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { data: null, error: { message: String(json?.error || "Errore route live-log") } };
+    }
+
+    return { data: json?.data ?? null, error: null };
+  }, []);
+
   const fetchData = async () => {
     setLoading(true);
     setErrorMsg(null);
@@ -875,12 +871,7 @@ export default function LivePage({ params }) {
     if (!didAutoPickWeekRef.current) {
       didAutoPickWeekRef.current = true;
 
-      const { data: allLogs } = await supabase
-        .from("workout_logs")
-        .select(
-          "exercise_uid, exercise_name, exercise_name_snapshot, day_label, exercise_index, week_number, completed, actual_reps, actual_weight, athlete_notes, pt_notes, pt_rpe, pt_metrics, id"
-        )
-        .eq("program_id", id);
+      const allLogs = await fetchWorkoutLogs({ programId: id });
 
       const byWeek = {};
       (allLogs || []).forEach((log) => {
@@ -896,9 +887,8 @@ export default function LivePage({ params }) {
         byWeek[w][k] = {
           ...log,
           athlete_notes: log.athlete_notes ?? "",
-          pt_notes: log.pt_notes ?? "",
-          pt_rpe: log.pt_rpe ?? null,
-          pt_metrics: log.pt_metrics ?? null,
+          athlete_metrics: log.athlete_metrics ?? {},
+          rpe: log.rpe ?? null,
         };
       });
 
@@ -924,11 +914,7 @@ export default function LivePage({ params }) {
     }
 
     // logs settimana attiva
-    const { data: savedLogs } = await supabase
-      .from("workout_logs")
-      .select("*")
-      .eq("program_id", id)
-      .eq("week_number", activeWeek);
+    const savedLogs = await fetchWorkoutLogs({ programId: id, weekNumber: activeWeek });
 
     const logsMap = {};
     if (savedLogs?.length) {
@@ -940,9 +926,8 @@ export default function LivePage({ params }) {
         logsMap[k] = {
           ...log,
           athlete_notes: log.athlete_notes ?? "",
-          pt_notes: log.pt_notes ?? "",
-          pt_rpe: log.pt_rpe ?? null,
-          pt_metrics: log.pt_metrics ?? null,
+          athlete_metrics: log.athlete_metrics ?? {},
+          rpe: log.rpe ?? null,
         };
       });
     }
@@ -950,11 +935,7 @@ export default function LivePage({ params }) {
 
     // history settimana precedente
     if (activeWeek > 1) {
-      const { data: prevLogs } = await supabase
-        .from("workout_logs")
-        .select("*")
-        .eq("program_id", id)
-        .eq("week_number", activeWeek - 1);
+      const prevLogs = await fetchWorkoutLogs({ programId: id, weekNumber: activeWeek - 1 });
 
       const historyMap = {};
       if (prevLogs?.length) {
@@ -966,9 +947,8 @@ export default function LivePage({ params }) {
           historyMap[k] = {
             ...log,
             athlete_notes: log.athlete_notes ?? "",
-            pt_notes: log.pt_notes ?? "",
-            pt_rpe: log.pt_rpe ?? null,
-            pt_metrics: log.pt_metrics ?? null,
+            athlete_metrics: log.athlete_metrics ?? {},
+            rpe: log.rpe ?? null,
           };
         });
       }
@@ -995,22 +975,7 @@ export default function LivePage({ params }) {
       const initialNotes =
         String(existingData?.athlete_notes ?? "").trim() || String(hist?.athlete_notes ?? "").trim() || "";
 
-      const initialPtNotes =
-        String(existingData?.pt_notes ?? "").trim() || String(hist?.pt_notes ?? "").trim() || "";
-
-      const initialPtRpe =
-        (existingData?.pt_rpe !== null && existingData?.pt_rpe !== undefined
-          ? String(existingData.pt_rpe).trim()
-          : "") ||
-        (hist?.pt_rpe !== null && hist?.pt_rpe !== undefined ? String(hist.pt_rpe).trim() : "") ||
-        "";
-
-      const initialPtMetrics = existingData?.pt_metrics ?? hist?.pt_metrics ?? null;
-
       setNoteInput(initialNotes);
-      setPtNoteInput(initialPtNotes);
-      setPtRpeInput(initialPtRpe);
-      setPtMetricsRows(rowsFromObj(initialPtMetrics));
 
       setSetLogsData(
         existingData
@@ -1052,27 +1017,11 @@ export default function LivePage({ params }) {
   );
 
   const safeUpsertWorkoutLog = async ({ existingId, payload }) => {
-    if (existingId) {
-      const res = await supabase.from("workout_logs").update(payload).eq("id", existingId).select("*").single();
-      if (!res.error) return res;
-
-      const msg = String(res.error.message || "").toLowerCase();
-      if (msg.includes("column") || msg.includes("schema cache")) {
-        const { pt_rpe, pt_metrics, pt_notes, ...reduced } = payload;
-        return await supabase.from("workout_logs").update(reduced).eq("id", existingId).select("*").single();
-      }
-      return res;
-    } else {
-      const res = await supabase.from("workout_logs").insert([payload]).select("*").single();
-      if (!res.error) return res;
-
-      const msg = String(res.error.message || "").toLowerCase();
-      if (msg.includes("column") || msg.includes("schema cache")) {
-        const { pt_rpe, pt_metrics, pt_notes, ...reduced } = payload;
-        return await supabase.from("workout_logs").insert([reduced]).select("*").single();
-      }
-      return res;
-    }
+    return await callLiveLogRoute({
+      mode: "upsert",
+      existingId: existingId ?? null,
+      payload,
+    });
   };
 
   const saveEntry = useCallback(
@@ -1096,7 +1045,6 @@ export default function LivePage({ params }) {
       const weightString = finalSets.map((s) => s.weight).join("-");
 
       const existing = logs[key];
-      const ptMetricsObj = safeObjFromRows(ptMetricsRows);
 
       const payload = {
         program_id: id,
@@ -1110,11 +1058,8 @@ export default function LivePage({ params }) {
         actual_reps: repsString,
         actual_weight: weightString,
         athlete_notes: String(noteInput ?? ""),
-
-        pt_notes: String(ptNoteInput ?? ""),
-        pt_rpe: toNullableNumber(ptRpeInput),
-        pt_metrics: ptMetricsObj,
-
+        athlete_metrics: existing?.athlete_metrics ?? {},
+        rpe: existing?.rpe ?? null,
         completed: existing?.completed === true,
       };
 
@@ -1127,15 +1072,14 @@ export default function LivePage({ params }) {
         [key]: {
           ...data,
           athlete_notes: data.athlete_notes ?? "",
-          pt_notes: data.pt_notes ?? "",
-          pt_rpe: data.pt_rpe ?? null,
-          pt_metrics: data.pt_metrics ?? null,
+          athlete_metrics: data.athlete_metrics ?? {},
+          rpe: data.rpe ?? null,
         },
       }));
 
       closeEdit();
     },
-    [activeWeek, closeEdit, id, logs, noteInput, ptMetricsRows, ptNoteInput, ptRpeInput, setLogsData, supabase]
+    [activeWeek, callLiveLogRoute, closeEdit, id, logs, noteInput, setLogsData]
   );
 
   const toggleConfirm = useCallback(
@@ -1152,10 +1096,7 @@ export default function LivePage({ params }) {
 
       if (current?.completed === true) {
         if (isLogEmpty(current)) {
-          const { error } = await supabase
-            .from("workout_logs")
-            .delete()
-            .eq("id", current.id);
+          const { error } = await callLiveLogRoute({ mode: "delete", id: current.id });
 
           if (error) {
             alert("Errore rimozione conferma: " + error.message);
@@ -1168,7 +1109,11 @@ export default function LivePage({ params }) {
             return copy;
           });
         } else {
-          const { error } = await supabase.from("workout_logs").update({ completed: false }).eq("id", current.id);
+          const { error } = await callLiveLogRoute({
+            mode: "update",
+            id: current.id,
+            updates: { completed: false },
+          });
           if (error) {
             alert("Errore rimozione conferma: " + error.message);
             return false;
@@ -1182,7 +1127,11 @@ export default function LivePage({ params }) {
       }
 
       if (current?.id) {
-        const { error } = await supabase.from("workout_logs").update({ completed: true }).eq("id", current.id);
+        const { error } = await callLiveLogRoute({
+          mode: "update",
+          id: current.id,
+          updates: { completed: true },
+        });
         if (error) {
           alert("Errore conferma: " + error.message);
           return false;
@@ -1201,9 +1150,8 @@ export default function LivePage({ params }) {
           actual_reps: "",
           actual_weight: "",
           athlete_notes: "",
-          pt_notes: "",
-          pt_rpe: null,
-          pt_metrics: {},
+          athlete_metrics: {},
+          rpe: null,
           completed: true,
         };
 
@@ -1219,9 +1167,8 @@ export default function LivePage({ params }) {
           [key]: {
             ...data,
             athlete_notes: data.athlete_notes ?? "",
-            pt_notes: data.pt_notes ?? "",
-            pt_rpe: data.pt_rpe ?? null,
-            pt_metrics: data.pt_metrics ?? null,
+            athlete_metrics: data.athlete_metrics ?? {},
+            rpe: data.rpe ?? null,
           },
         }));
       }
@@ -1230,7 +1177,7 @@ export default function LivePage({ params }) {
       setTimeout(() => setConfirmFlash(false), 180);
       return true;
     },
-    [activeWeek, closeEdit, id, logs, supabase]
+    [activeWeek, callLiveLogRoute, closeEdit, id, logs]
   );
 
   const openLastModal = useCallback((log) => {
@@ -1313,14 +1260,7 @@ export default function LivePage({ params }) {
 
     setLogsData,
     noteInput,
-    ptRpeInput,
-    ptNoteInput,
-    ptMetricsRows,
-
     setNoteInput,
-    setPtRpeInput,
-    setPtNoteInput,
-    setPtMetricsRows,
 
     openLastModal,
     closeEdit,
@@ -1411,32 +1351,6 @@ export default function LivePage({ params }) {
                 <div className="text-slate-300 text-sm">Nessun dato nella settimana precedente.</div>
               ) : (
                 <>
-                  {hasValue(lastModalLog.pt_rpe) ? (
-                    <div className="mb-4 flex items-center justify-between bg-slate-950 border border-fuchsia-800/30 rounded-2xl px-3 py-2">
-                      <div className="text-[10px] font-black text-fuchsia-200 uppercase tracking-widest">RPE PT</div>
-                      <div className="text-lg font-black text-white">{String(lastModalLog.pt_rpe)}</div>
-                    </div>
-                  ) : null}
-
-                  {lastModalLog?.pt_metrics &&
-                  typeof lastModalLog.pt_metrics === "object" &&
-                  hasValue(lastModalLog.pt_metrics.rir) ? (
-                    <div className="mb-4 flex items-center justify-between bg-slate-950 border border-amber-800/30 rounded-2xl px-3 py-2">
-                      <div className="text-[10px] font-black text-amber-200 uppercase tracking-widest">RIR</div>
-                      <div className="text-lg font-black text-white">{String(lastModalLog.pt_metrics.rir)}</div>
-                    </div>
-                  ) : null}
-
-                  {hasValue(lastModalLog.pt_notes) ? (
-  <div className="mb-4 rounded-2xl border border-fuchsia-800/25 bg-fuchsia-900/10 p-3">
-    <div className="text-[10px] font-black text-fuchsia-200 uppercase tracking-widest mb-2">
-      Note PT
-    </div>
-    <div className="text-sm text-slate-100 whitespace-pre-wrap break-words">
-      {String(lastModalLog.pt_notes)}
-    </div>
-  </div>
-) : null}
 
                   <div className="text-xs text-slate-400 uppercase font-black mb-2">Serie registrate</div>
                   <div className="space-y-2">

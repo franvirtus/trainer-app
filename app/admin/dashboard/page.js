@@ -2,14 +2,13 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr"; // <--- CAMBIAMENTO FONDAMENTALE
+import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
 import { Users, ChevronRight, LogOut, User, Plus, Trash2, X } from "lucide-react";
 
 export default function AdminDashboard() {
   const router = useRouter();
 
-  // --- CONNESSIONE SICURA (Usa le variabili d'ambiente come il Login) ---
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -17,9 +16,9 @@ export default function AdminDashboard() {
 
   const [clients, setClients] = useState([]);
   const [trainerName, setTrainerName] = useState("");
+  const [trainerId, setTrainerId] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Modal: nuovo atleta
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
     full_name: "",
@@ -40,29 +39,29 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
 
-    // 1. Verifica utente loggato
     const { data: authData, error: authErr } = await supabase.auth.getUser();
     const user = authData?.user;
 
     if (authErr || !user) {
-      router.push("/login"); // Se non sei loggato, ti rimanda via
+      router.push("/login");
       return;
     }
 
-    setTrainerName(user.user_metadata?.first_name || user.email.split("@")[0]);
+    setTrainerId(user.id);
+    setTrainerName(user.user_metadata?.first_name || user.email?.split("@")[0] || "Trainer");
 
-    // 2. Scarica i clienti
     const { data, error } = await supabase
       .from("clients")
       .select(
-        "id, created_at, full_name, email, phone, birth_date, height_cm, current_weight_kg, goal, is_active"
+        "id, created_at, full_name, email, phone, birth_date, height_cm, current_weight_kg, goal, is_active, trainer_id"
       )
       .eq("is_active", true)
+      .eq("trainer_id", user.id)
       .order("created_at", { ascending: false });
 
     if (error) {
       console.error("Errore fetch:", error);
-      // Non mostriamo alert per ogni errore di rete, meglio un log o un toast
+      setClients([]);
     } else {
       setClients(data || []);
     }
@@ -72,7 +71,7 @@ export default function AdminDashboard() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.refresh(); // Pulisce la cache della rotta
+    router.refresh();
     router.push("/login");
   };
 
@@ -100,8 +99,14 @@ export default function AdminDashboard() {
 
   const createAthlete = async () => {
     const fullName = (form.full_name || "").trim();
+
     if (!fullName) {
       alert("Inserisci Nome e cognome.");
+      return;
+    }
+
+    if (!trainerId) {
+      alert("Trainer non identificato.");
       return;
     }
 
@@ -115,6 +120,7 @@ export default function AdminDashboard() {
       current_weight_kg: form.current_weight_kg !== "" ? Number(form.current_weight_kg) : null,
       goal: (form.goal || "").trim() || null,
       is_active: true,
+      trainer_id: trainerId,
     };
 
     const { error } = await supabase.from("clients").insert([payload]);
@@ -125,16 +131,23 @@ export default function AdminDashboard() {
     }
 
     setShowCreate(false);
-    fetchData(); // Ricarica la lista
+    fetchData();
   };
 
   const deactivateClient = async (clientId, displayName) => {
     if (!confirm(`Vuoi eliminare (disattivare) "${displayName}"?`)) return;
 
-    const { error } = await supabase.from("clients").update({ is_active: false }).eq("id", clientId);
+    const { error } = await supabase
+      .from("clients")
+      .update({ is_active: false })
+      .eq("id", clientId)
+      .eq("trainer_id", trainerId);
 
-    if (error) alert("Errore eliminazione: " + error.message);
-    else fetchData();
+    if (error) {
+      alert("Errore eliminazione: " + error.message);
+    } else {
+      fetchData();
+    }
   };
 
   if (loading) {
@@ -148,7 +161,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans pb-20">
-      {/* HEADER */}
       <div className="bg-slate-900 text-white p-6 sticky top-0 z-10 flex justify-between items-center shadow-lg">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
@@ -177,13 +189,12 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* BODY */}
       <div className="max-w-2xl mx-auto p-6">
         {clients.length === 0 ? (
           <div className="text-center py-20 text-slate-400">
-            <Users size={48} className="mx-auto mb-4 opacity-20"/>
+            <Users size={48} className="mx-auto mb-4 opacity-20" />
             <p className="font-medium">Nessun atleta trovato.</p>
-            <p className="text-sm mt-2">Premi il tasto "+" in alto per iniziare.</p>
+            <p className="text-sm mt-2">Premi il tasto + in alto per iniziare.</p>
           </div>
         ) : (
           <div className="grid gap-3">
@@ -204,12 +215,8 @@ export default function AdminDashboard() {
                     <div>
                       <h3 className="font-bold text-lg text-slate-800 leading-tight">{displayName}</h3>
                       <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-xs text-slate-400 mt-1">
-                         {(client.email || client.phone) && (
-                            <span>{client.email || client.phone}</span>
-                         )}
-                         {client.goal && (
-                            <span className="hidden sm:inline">• {client.goal}</span>
-                         )}
+                        {(client.email || client.phone) && <span>{client.email || client.phone}</span>}
+                        {client.goal && <span className="hidden sm:inline">• {client.goal}</span>}
                       </div>
                     </div>
                   </div>
@@ -235,7 +242,6 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* MODAL CREA ATLETA */}
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
@@ -246,7 +252,9 @@ export default function AdminDashboard() {
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div>
                 <div className="text-xl font-black text-slate-900">Nuovo atleta</div>
-                <div className="text-sm text-slate-500 font-medium">Inserisci i dati base per creare la scheda.</div>
+                <div className="text-sm text-slate-500 font-medium">
+                  Inserisci i dati base per creare la scheda.
+                </div>
               </div>
               <button
                 onClick={closeCreate}
@@ -282,7 +290,9 @@ export default function AdminDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Data di nascita</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                    Data di nascita
+                  </label>
                   <input
                     type="date"
                     value={form.birth_date}
@@ -315,7 +325,9 @@ export default function AdminDashboard() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Altezza (cm)</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                    Altezza (cm)
+                  </label>
                   <input
                     inputMode="numeric"
                     value={form.height_cm}
@@ -325,7 +337,9 @@ export default function AdminDashboard() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Peso (kg)</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                    Peso (kg)
+                  </label>
                   <input
                     inputMode="decimal"
                     value={form.current_weight_kg}

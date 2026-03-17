@@ -6,7 +6,6 @@ import { createClient } from "@supabase/supabase-js";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import nextDynamic from "next/dynamic";
 
-// ✅ PATH GIUSTO: app/admin/clients/[id] -> app/components
 const ExerciseCharts = nextDynamic(() => import("../../components/ExerciseCharts"), {
   ssr: false,
 });
@@ -35,12 +34,10 @@ import {
   StickyNote,
 } from "lucide-react";
 
-// --- SUPABASE ---
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// --- UI ---
 const TabBtn = ({ id, activeTab, onClick, icon: Icon, label }) => {
   const active = activeTab === id;
   return (
@@ -70,9 +67,7 @@ const SectionTitle = ({ icon: Icon, title }) => (
 
 const MeasureInput = ({ label, value, onChange, placeholder }) => (
   <div className="flex flex-col gap-1">
-    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-      {label}
-    </label>
+    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</label>
     <div className="relative group">
       <input
         type="number"
@@ -89,7 +84,6 @@ const MeasureInput = ({ label, value, onChange, placeholder }) => (
   </div>
 );
 
-// --- Helpers ---
 const toNum = (v) => {
   const t = String(v ?? "").trim().replace(",", ".");
   if (!t) return null;
@@ -97,13 +91,11 @@ const toNum = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
-const splitDashNums = (dashStr) => {
-  // "10-8-8" => [10,8,8]
-  return String(dashStr ?? "")
+const splitDashNums = (dashStr) =>
+  String(dashStr ?? "")
     .split("-")
     .map((x) => toNum(x))
     .filter((x) => x !== null);
-};
 
 const dateKey = (isoOrDate) => {
   const d = new Date(isoOrDate);
@@ -128,16 +120,73 @@ const ddmm = (isoOrDate) => {
   return `${dd}/${mm}`;
 };
 
-// Espande 1 log (1 esercizio) in N eventi (1 riga = 1 set)
+const hasRealValue = (v) => {
+  if (v === null || v === undefined) return false;
+  if (typeof v === "number") return Number.isFinite(v);
+  if (typeof v === "boolean") return true;
+  if (typeof v === "string") return v.trim() !== "";
+  return true;
+};
+
+const formatMetricValue = (v) => {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "number") return String(v);
+  if (typeof v === "boolean") return v ? "sì" : "no";
+  return String(v).trim();
+};
+
+const normalizeMetricEntries = (ptMetrics) => {
+  if (!ptMetrics || typeof ptMetrics !== "object") return [];
+  const hiddenKeys = new Set([
+    "target_rpe",
+    "pt_rpe",
+    "rpe",
+    "target_kg",
+    "target_load",
+    "target_reps",
+  ]);
+
+  return Object.entries(ptMetrics)
+    .filter(([key, value]) => !hiddenKeys.has(key) && hasRealValue(value))
+    .map(([key, value]) => ({ key, value: formatMetricValue(value) }));
+};
+
+const getExerciseDisplayForWeek = (rawEx, weekNumber) => {
+  if (!rawEx || typeof rawEx !== "object") return rawEx;
+  const w = Number(weekNumber) || 1;
+  if (w <= 1 || !rawEx?.progression) return rawEx;
+
+  const override = rawEx.progression?.[w] || rawEx.progression?.[String(w)];
+  if (!override || typeof override !== "object") return rawEx;
+
+  const basePt =
+    rawEx?.pt_metrics && typeof rawEx.pt_metrics === "object" && !Array.isArray(rawEx.pt_metrics)
+      ? rawEx.pt_metrics
+      : {};
+
+  const overridePt =
+    override?.pt_metrics && typeof override.pt_metrics === "object" && !Array.isArray(override.pt_metrics)
+      ? override.pt_metrics
+      : {};
+
+  return {
+    ...rawEx,
+    ...override,
+    pt_metrics: {
+      ...basePt,
+      ...overridePt,
+    },
+  };
+};
+
+
 const expandLogToEvents = (log) => {
   const repsArr = splitDashNums(log.actual_reps);
   const kgArr = splitDashNums(log.actual_weight);
 
-  // ✅ pt_metrics sempre oggetto, mai null (così possiamo gestire parametri dinamici senza placeholder)
   const ptMetrics =
     log.pt_metrics && typeof log.pt_metrics === "object" ? log.pt_metrics : {};
 
-  // ✅ RPE target PT: prima colonna pt_rpe, poi fallback su pt_metrics
   const ptRpe =
     toNum(log.pt_rpe) ??
     toNum(ptMetrics?.target_rpe) ??
@@ -145,7 +194,6 @@ const expandLogToEvents = (log) => {
     toNum(ptMetrics?.rpe) ??
     null;
 
-  // target kg/reps (se li metterai nel pt_metrics)
   const ptTargetKg = toNum(ptMetrics?.target_kg) ?? toNum(ptMetrics?.target_load) ?? null;
   const ptTargetReps = toNum(ptMetrics?.target_reps) ?? null;
 
@@ -167,29 +215,19 @@ const expandLogToEvents = (log) => {
       set_index: i + 1,
       reps: repsArr[i] ?? null,
       kg: kgArr[i] ?? null,
-
-      // atleta RPE (colonna rpe del log)
       rpe: toNum(log.rpe),
-
-      // PT target RPE (target di scheda)
       pt_rpe: ptRpe,
-
-      // target opzionali
       pt_target_kg: ptTargetKg,
       pt_target_reps: ptTargetReps,
-
-      // ✅ parametri dinamici del PT (solo se inseriti nel DB)
       pt_metrics: ptMetrics,
-
-      athlete_notes: log.athlete_notes || "",
-      pt_notes: log.pt_notes || "",
+      athlete_notes: String(log.athlete_notes || "").trim(),
+      pt_notes: String(log.pt_notes || "").trim(),
       completed: !!log.completed,
     });
   }
   return out;
 };
 
-// --- PAGE ---
 export default function ClientPage({ params }) {
   const { id } = use(params);
 
@@ -205,7 +243,6 @@ export default function ClientPage({ params }) {
     router.replace(`${pathname}?${p.toString()}`, { scroll: false });
   };
 
-  // Data
   const [client, setClient] = useState(null);
   const [programs, setPrograms] = useState([]);
   const [recentLogs, setRecentLogs] = useState([]);
@@ -213,7 +250,6 @@ export default function ClientPage({ params }) {
   const [bodyMeasuresHistory, setBodyMeasuresHistory] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Profile
   const [profile, setProfile] = useState({
     full_name: "",
     gender: "F",
@@ -226,11 +262,9 @@ export default function ClientPage({ params }) {
   });
   const [savingProfile, setSavingProfile] = useState(false);
 
-  // Weight
   const [newWeight, setNewWeight] = useState("");
   const [savingWeight, setSavingWeight] = useState(false);
 
-  // Body measures
   const [bodyForm, setBodyForm] = useState({
     neck: "",
     chest: "",
@@ -242,20 +276,37 @@ export default function ClientPage({ params }) {
   });
   const [savingBody, setSavingBody] = useState(false);
 
-  // Create program
   const [showCreateProgram, setShowCreateProgram] = useState(false);
   const [cpTitle, setCpTitle] = useState("");
   const [cpDuration, setCpDuration] = useState(4);
   const [cpNotes, setCpNotes] = useState("");
   const [creatingProgram, setCreatingProgram] = useState(false);
 
-  // Log UI
-  const [openExercise, setOpenExercise] = useState({}); // { "Squat__GiornoA": true }
+  const [openExercise, setOpenExercise] = useState({});
 
   useEffect(() => {
     if (id) fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+  useEffect(() => {
+    if (activeTab !== "activity" || !id) return;
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, id]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (activeTab === "activity" && id) fetchData();
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, id]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -301,14 +352,32 @@ export default function ClientPage({ params }) {
       if (progData.length > 0) {
         const progIds = progData.map((p) => p.id);
 
-        const { data: simpleLogs } = await supabase
-          .from("workout_logs")
-          .select("*")
-          .in("program_id", progIds)
-          .order("created_at", { ascending: true }) // dal più vecchio al più recente
-          .limit(3000);
+        const logResponses = await Promise.all(
+          progIds.map(async (programId) => {
+            try {
+              const res = await fetch(`/api/live-log-read?programId=${encodeURIComponent(programId)}`, {
+                cache: "no-store",
+              });
+              const json = await res.json().catch(() => ({ data: [] }));
+              if (!res.ok) {
+                console.error("Errore lettura workout_logs via API:", programId, json?.error);
+                return [];
+              }
+              return Array.isArray(json?.data) ? json.data : [];
+            } catch (err) {
+              console.error("Errore fetch /api/live-log-read:", programId, err);
+              return [];
+            }
+          })
+        );
 
-        setRecentLogs(simpleLogs || []);
+        const simpleLogs = logResponses.flat().sort((a, b) => {
+          const ta = new Date(a?.created_at || 0).getTime();
+          const tb = new Date(b?.created_at || 0).getTime();
+          return ta - tb;
+        });
+
+        setRecentLogs(simpleLogs);
       } else {
         setRecentLogs([]);
       }
@@ -438,18 +507,58 @@ export default function ClientPage({ params }) {
     }
   };
 
-  // ==========================
-  // LOG ATTIVITÀ: per esercizio
-  // ==========================
+  const currentExerciseSnapshotByProgramUid = useMemo(() => {
+    const map = new Map();
 
-  // 1) espandiamo ogni log in eventi (1 evento = 1 set)
+    (programs || []).forEach((program) => {
+      const days = Array.isArray(program?.days_structure) ? program.days_structure : [];
+      days.forEach((day) => {
+        const exercises = Array.isArray(day?.exercises) ? day.exercises : [];
+        exercises.forEach((ex) => {
+          const uid = String(ex?.id || "").trim();
+          if (!uid) return;
+          map.set(`${program.id}__${uid}`, ex);
+        });
+      });
+    });
+
+    return map;
+  }, [programs]);
+
   const expandedEvents = useMemo(() => {
     const out = [];
+
     (recentLogs || []).forEach((log) => {
       const name = String(log.exercise_name_snapshot || log.exercise_name || "").trim();
       const uid = String(log.exercise_uid || "").trim();
       if (!name && !uid) return;
-      out.push(...expandLogToEvents(log));
+
+      const exSnapshot = uid
+        ? currentExerciseSnapshotByProgramUid.get(`${log.program_id || ""}__${uid}`)
+        : null;
+
+      const weekAwareSnapshot = getExerciseDisplayForWeek(exSnapshot, log.week_number);
+      const fallbackPtMetrics =
+        weekAwareSnapshot?.pt_metrics &&
+        typeof weekAwareSnapshot.pt_metrics === "object" &&
+        !Array.isArray(weekAwareSnapshot.pt_metrics)
+          ? weekAwareSnapshot.pt_metrics
+          : {};
+
+      const rowPtMetrics =
+        log?.pt_metrics && typeof log.pt_metrics === "object" && !Array.isArray(log.pt_metrics)
+          ? log.pt_metrics
+          : {};
+
+      const enrichedLog = {
+        ...log,
+        pt_metrics: {
+          ...fallbackPtMetrics,
+          ...rowPtMetrics,
+        },
+      };
+
+      out.push(...expandLogToEvents(enrichedLog));
     });
 
     out.sort((a, b) => {
@@ -460,28 +569,17 @@ export default function ClientPage({ params }) {
     });
 
     return out;
-  }, [recentLogs]);
+  }, [recentLogs, currentExerciseSnapshotByProgramUid]);
 
   const currentExerciseNameByProgramUid = useMemo(() => {
     const map = new Map();
-
-    (programs || []).forEach((program) => {
-      const days = Array.isArray(program?.days_structure) ? program.days_structure : [];
-      days.forEach((day) => {
-        const exercises = Array.isArray(day?.exercises) ? day.exercises : [];
-        exercises.forEach((ex) => {
-          const uid = String(ex?.id || "").trim();
-          const name = String(ex?.name || "").trim();
-          if (!uid || !name) return;
-          map.set(`${program.id}__${uid}`, name);
-        });
-      });
+    currentExerciseSnapshotByProgramUid.forEach((ex, key) => {
+      const name = String(ex?.name || "").trim();
+      if (name) map.set(key, name);
     });
-
     return map;
-  }, [programs]);
+  }, [currentExerciseSnapshotByProgramUid]);
 
-  // 2) raggruppiamo per esercizio + day_label
   const exerciseGroups = useMemo(() => {
     const map = new Map();
     expandedEvents.forEach((ev) => {
@@ -523,10 +621,8 @@ export default function ClientPage({ params }) {
     return groups;
   }, [expandedEvents, currentExerciseNameByProgramUid]);
 
-  // 3) punti grafico: 1 punto = 1 set
   const buildChartPoints = (group) => {
     return (group.events || []).map((ev) => {
-      // ✅ includiamo eventuali metriche PT numeriche (senza placeholder: solo se davvero numeriche)
       const extraNumericPt = Object.fromEntries(
         Object.entries(ev.pt_metrics || {})
           .map(([k, v]) => [k, toNum(v)])
@@ -534,24 +630,59 @@ export default function ClientPage({ params }) {
       );
 
       return {
-        label: `${ddmm(ev.created_at)} S${ev.set_index}`, // ✅ label usata dal grafico
+        label: `${ddmm(ev.created_at)} S${ev.set_index}`,
         reps: ev.reps ?? null,
         kg: ev.kg ?? null,
         rpe: ev.rpe ?? null,
         pt_rpe: ev.pt_rpe ?? null,
         pt_target_kg: ev.pt_target_kg ?? null,
         pt_target_reps: ev.pt_target_reps ?? null,
-
-        // ⚠️ ExerciseCharts probabilmente ignora queste chiavi se non supportate.
-        // Le includiamo per coerenza dati e futura estensione.
         ...extraNumericPt,
       };
     });
   };
 
-  const toggleOpen = (key) => setOpenExercise((s) => ({ ...s, [key]: !s[key] }));
+  const buildLogSummaries = (group) => {
+    const map = new Map();
 
-  // ========= RENDER =========
+    (group?.events || []).forEach((ev) => {
+      const metricEntries = normalizeMetricEntries(ev.pt_metrics);
+
+      if (!map.has(ev.base_log_id)) {
+        map.set(ev.base_log_id, {
+          base_log_id: ev.base_log_id,
+          created_at: ev.created_at,
+          date_label: ev.date_label,
+          athlete_notes: ev.athlete_notes,
+          pt_notes: ev.pt_notes,
+          athlete_rpe: ev.rpe,
+          pt_rpe: ev.pt_rpe,
+          metricEntries,
+          set_count: 0,
+          setRows: [],
+        });
+      }
+
+      const cur = map.get(ev.base_log_id);
+      cur.set_count += 1;
+      cur.setRows.push({
+        set_index: ev.set_index,
+        reps: ev.reps,
+        kg: ev.kg,
+      });
+    });
+
+    return Array.from(map.values())
+      .map((session) => ({
+        ...session,
+        setRows: (session.setRows || []).sort(
+          (a, b) => (a.set_index || 0) - (b.set_index || 0)
+        ),
+      }))
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  };
+
+  const toggleOpen = (key) => setOpenExercise((s) => ({ ...s, [key]: !s[key] }));
 
   if (loading)
     return (
@@ -562,7 +693,6 @@ export default function ClientPage({ params }) {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans pb-20">
-      {/* HEADER STICKY */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
         <div className="max-w-6xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between min-h-[48px]">
@@ -604,11 +734,9 @@ export default function ClientPage({ params }) {
       </div>
 
       <div className="max-w-6xl mx-auto p-6 space-y-8">
-        {/* --- TAB PROFILO --- */}
         {activeTab === "profile" && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="xl:col-span-1 space-y-6">
-              {/* Dati Anagrafici */}
               <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
                 <SectionTitle icon={User} title="Dati Anagrafici" />
                 <div className="space-y-4">
@@ -677,7 +805,6 @@ export default function ClientPage({ params }) {
                 </div>
               </div>
 
-              {/* Peso */}
               <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
                 <SectionTitle icon={Scale} title="Peso Corporeo" />
                 <div className="flex gap-2 mb-4">
@@ -719,7 +846,6 @@ export default function ClientPage({ params }) {
             </div>
 
             <div className="xl:col-span-2 space-y-6">
-              {/* Nuova Misurazione */}
               <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
                 <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
                   <SectionTitle icon={Ruler} title="Nuova Misurazione" />
@@ -744,7 +870,6 @@ export default function ClientPage({ params }) {
                 </div>
               </div>
 
-              {/* Storico */}
               <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
                 <SectionTitle icon={History} title="Storico Circonferenze" />
                 <div className="overflow-x-auto">
@@ -792,7 +917,6 @@ export default function ClientPage({ params }) {
           </div>
         )}
 
-        {/* --- TAB SCHEDE --- */}
         {activeTab === "programs" && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
             {programs.length === 0 ? (
@@ -892,7 +1016,6 @@ export default function ClientPage({ params }) {
           </div>
         )}
 
-        {/* --- TAB ATTIVITÀ --- */}
         {activeTab === "activity" && (
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <SectionTitle icon={ClipboardList} title="Log Attività (per esercizio)" />
@@ -904,27 +1027,44 @@ export default function ClientPage({ params }) {
                 {exerciseGroups.map((g) => {
                   const isOpen = !!openExercise[g.key];
                   const pts = buildChartPoints(g);
-
+                  const sessionSummaries = buildLogSummaries(g);
                   const rows = g.events.length;
                   const last = g.events[g.events.length - 1];
 
                   const hasAnyRpe = g.events.some((e) => toNum(e.rpe) !== null);
                   const hasAnyPtRpe = g.events.some((e) => toNum(e.pt_rpe) !== null);
-
-                  // ✅ parametri PT "accensi" = presenti e numerici almeno una volta
                   const activePtParams = Array.from(
                     new Set(
                       g.events.flatMap((e) =>
                         Object.entries(e.pt_metrics || {})
-                          .filter(([_, v]) => toNum(v) !== null)
+                          .filter(([key, value]) => {
+                            const hiddenKeys = new Set([
+                              "target_rpe",
+                              "pt_rpe",
+                              "rpe",
+                              "target_kg",
+                              "target_load",
+                              "target_reps",
+                            ]);
+                            return !hiddenKeys.has(key) && hasRealValue(value);
+                          })
                           .map(([k]) => k)
                       )
                     )
                   );
 
+                  const hasSessionMeta = sessionSummaries.some(
+                    (s) =>
+                      s.athlete_notes ||
+                      s.pt_notes ||
+                      s.athlete_rpe !== null ||
+                      s.pt_rpe !== null ||
+                      (s.metricEntries || []).length > 0 ||
+                      (s.setRows || []).some((row) => row.reps !== null || row.kg !== null)
+                  );
+
                   return (
                     <div key={g.key} className="border border-slate-200 rounded-2xl overflow-hidden">
-                      {/* header */}
                       <button
                         type="button"
                         onClick={() => toggleOpen(g.key)}
@@ -985,24 +1125,108 @@ export default function ClientPage({ params }) {
                         </div>
                       </button>
 
-                      {/* body */}
                       {isOpen && (
                         <div className="bg-slate-50/40 px-5 py-5 space-y-4">
-                          {/* charts */}
                           <div className="bg-white rounded-2xl border border-slate-200 p-4">
                             <div className="flex items-center gap-2 text-xs font-black text-slate-700 uppercase tracking-wider mb-3">
-                              <BarChart3 size={14} /> Grafici (reps/kg per set, ordine cronologico)
+                              <BarChart3 size={14} /> Grafici (reps/kg/rpe per set, ordine cronologico)
                             </div>
 
                             <ExerciseCharts data={pts} showPtRpe={true} showAthleteRpe={true} showTargets={true} />
                           </div>
 
-                          {/* events table */}
+                          {hasSessionMeta ? (
+                            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                              <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+                                <StickyNote size={14} className="text-slate-500" />
+                                <div className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                                  Sessioni / note e feedback (1 riga = 1 log)
+                                </div>
+                              </div>
+
+                              <div className="divide-y divide-slate-50">
+                                {sessionSummaries.map((session) => {
+                                  const hasContent =
+                                    session.athlete_notes ||
+                                    session.pt_notes ||
+                                    session.athlete_rpe !== null ||
+                                    session.pt_rpe !== null ||
+                                    (session.metricEntries || []).length > 0 ||
+                                    (session.setRows || []).some((row) => row.reps !== null || row.kg !== null);
+
+                                  if (!hasContent) return null;
+
+                                  return (
+                                    <div
+                                      key={session.base_log_id}
+                                      className="px-4 py-4 grid grid-cols-1 lg:grid-cols-[180px_1fr] gap-4"
+                                    >
+                                      <div>
+                                        <div className="text-sm font-black text-slate-900">{session.date_label}</div>
+                                        <div className="text-xs text-slate-500 mt-1">
+                                          {session.set_count} {session.set_count === 1 ? "set" : "set"}
+                                        </div>
+                                      </div>
+
+                                      <div className="space-y-3">
+                                        {(session.athlete_rpe !== null || session.pt_rpe !== null) && (
+                                          <div className="flex flex-wrap gap-2">
+                                            {session.athlete_rpe !== null ? (
+                                              <span className="text-[11px] font-black px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200">
+                                                RPE atleta: {session.athlete_rpe}
+                                              </span>
+                                            ) : null}
+                                            {session.pt_rpe !== null ? (
+                                              <span className="text-[11px] font-black px-3 py-1.5 rounded-xl bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200">
+                                                RPE PT: {session.pt_rpe}
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                        )}
+
+                                        {session.metricEntries?.length ? (
+                                          <div className="flex flex-wrap gap-2">
+                                            {session.metricEntries.map((entry) => (
+                                              <span
+                                                key={`${session.base_log_id}_${entry.key}`}
+                                                className="text-[11px] font-black px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200"
+                                              >
+                                                {entry.key}: {entry.value}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : null}
+
+                                        {session.athlete_notes ? (
+                                          <div className="text-sm flex items-start gap-2 text-slate-700">
+                                            <StickyNote size={16} className="text-slate-400 mt-0.5 shrink-0" />
+                                            <div>
+                                              <span className="font-black">Atleta:</span> {session.athlete_notes}
+                                            </div>
+                                          </div>
+                                        ) : null}
+
+                                        {session.pt_notes ? (
+                                          <div className="text-sm flex items-start gap-2 text-slate-700">
+                                            <StickyNote size={16} className="text-slate-400 mt-0.5 shrink-0" />
+                                            <div>
+                                              <span className="font-black">PT:</span> {session.pt_notes}
+                                            </div>
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : null}
+
                           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
                             <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
                               <Calendar size={14} className="text-slate-500" />
                               <div className="text-xs font-black text-slate-700 uppercase tracking-wider">
-                                Eventi (1 riga = 1 set)
+                                Eventi per set (1 riga = 1 set)
                               </div>
                             </div>
 
@@ -1014,14 +1238,6 @@ export default function ClientPage({ params }) {
                                     <th className="py-3 px-4 text-left">Set</th>
                                     <th className="py-3 px-4 text-left">Reps</th>
                                     <th className="py-3 px-4 text-left">Kg</th>
-                                    <th className="py-3 px-4 text-left">RPE</th>
-                                    <th className="py-3 px-4 text-left">PT_RPE</th>
-                                    {activePtParams.map((param) => (
-                                      <th key={param} className="py-3 px-4 text-left">
-                                        {param.toUpperCase()}
-                                      </th>
-                                    ))}
-                                    <th className="py-3 px-4 text-left">Note</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
@@ -1041,38 +1257,6 @@ export default function ClientPage({ params }) {
                                       <td className="py-3 px-4 font-mono font-bold text-green-700">
                                         {ev.kg ?? "-"} {ev.kg !== null ? "kg" : ""}
                                       </td>
-                                      <td className="py-3 px-4 font-mono text-slate-700">{ev.rpe ?? "-"}</td>
-                                      <td className="py-3 px-4 font-mono text-slate-700">{ev.pt_rpe ?? "-"}</td>
-
-                                      {activePtParams.map((param) => (
-                                        <td key={param} className="py-3 px-4 font-mono text-slate-700">
-                                          {ev.pt_metrics?.[param] ?? "-"}
-                                        </td>
-                                      ))}
-
-                                      <td className="py-3 px-4 text-slate-600">
-                                        <div className="flex flex-col gap-1">
-                                          {ev.athlete_notes ? (
-                                            <div className="text-xs flex items-start gap-2">
-                                              <StickyNote size={14} className="text-slate-400 mt-0.5" />
-                                              <span>
-                                                <span className="font-bold text-slate-700">Atleta:</span>{" "}
-                                                {ev.athlete_notes}
-                                              </span>
-                                            </div>
-                                          ) : null}
-                                          {ev.pt_notes ? (
-                                            <div className="text-xs flex items-start gap-2">
-                                              <StickyNote size={14} className="text-slate-400 mt-0.5" />
-                                              <span>
-                                                <span className="font-bold text-slate-700">PT:</span> {ev.pt_notes}
-                                              </span>
-                                            </div>
-                                          ) : !ev.athlete_notes ? (
-                                            <span className="text-xs text-slate-300">-</span>
-                                          ) : null}
-                                        </div>
-                                      </td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -1090,7 +1274,6 @@ export default function ClientPage({ params }) {
         )}
       </div>
 
-      {/* MODALE NUOVA SCHEDA */}
       {showCreateProgram && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-200">
