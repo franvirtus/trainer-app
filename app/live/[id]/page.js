@@ -810,26 +810,31 @@ export default function LivePage({ params }) {
   };
 
   const fetchWorkoutLogs = useCallback(async ({ programId, weekNumber = null }) => {
-    if (!supabase) return [];
+  const qs = new URLSearchParams({ programId: String(programId) });
+  if (weekNumber !== null && weekNumber !== undefined) {
+    qs.set("weekNumber", String(weekNumber));
+  }
 
-    let query = supabase
-      .from("workout_logs")
-      .select("*")
-      .eq("program_id", programId);
+  const response = await fetch(`/api/live-log-read?${qs.toString()}`, {
+    method: "GET",
+    cache: "no-store",
+  });
 
-    if (weekNumber !== null) {
-      query = query.eq("week_number", weekNumber);
-    }
+  let json = null;
+  try {
+    json = await response.json();
+  } catch {
+    json = null;
+  }
 
-    const { data, error } = await query.order("created_at", { ascending: true });
+  if (!response.ok) {
+    throw new Error(
+      json?.error || json?.message || `HTTP ${response.status} durante la lettura dei workout logs`
+    );
+  }
 
-    if (error) {
-      console.error("Errore DB:", error);
-      throw error;
-    }
-
-    return Array.isArray(data) ? data : [];
-  }, [supabase]);
+  return Array.isArray(json?.data) ? json.data : [];
+}, []);
 
  const fetchData = useCallback(async () => {
   setLoading(true);
