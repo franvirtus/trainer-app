@@ -684,7 +684,6 @@ function GroupCard({
 export default function LivePage({ params }) {
   const resolvedParams = use(params); // ✅ Aggiungi questo
   const id = resolvedParams.id;       // ✅ Prendi l'id da qui
-  const { id } = use(params);
 
   // --- SUPABASE ---
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
