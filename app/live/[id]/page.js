@@ -682,6 +682,8 @@ function GroupCard({
 /* ----------------------------- PAGE ----------------------------- */
 
 export default function LivePage({ params }) {
+  const resolvedParams = use(params); // ✅ Aggiungi questo
+  const id = resolvedParams.id;       // ✅ Prendi l'id da qui
   const { id } = use(params);
 
   // --- SUPABASE ---
@@ -809,39 +811,28 @@ useEffect(() => {
   };
 
   const fetchWorkoutLogs = useCallback(async ({ programId, weekNumber = null }) => {
-    const params = new URLSearchParams({ programId: String(programId) });
-    if (weekNumber !== null && weekNumber !== undefined) {
-      params.set("weekNumber", String(weekNumber));
+    if (!supabase) return [];
+    
+    let query = supabase
+      .from("workout_logs")
+      .select("*")
+      .eq("program_id", programId);
+
+    if (weekNumber !== null) {
+      query = query.eq("week_number", weekNumber);
     }
 
-    const res = await fetch(`/api/live-log-read?${params.toString()}`, {
-      method: "GET",
-      cache: "no-store",
-    });
+    const { data, error } = await query.order("created_at", { ascending: true });
 
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(String(json?.error || "Errore lettura workout_logs"));
+    if (error) {
+      console.error("Errore DB:", error);
+      throw error;
     }
 
-    return Array.isArray(json?.data) ? json.data : [];
-  }, []);
+    return Array.isArray(data) ? data : [];
+  }, [supabase]);
 
-  const callLiveLogRoute = useCallback(async (body) => {
-    const res = await fetch("/api/live-log", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body || {}),
-    });
-
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return { data: null, error: { message: String(json?.error || "Errore route live-log") } };
-    }
-
-    return { data: json?.data ?? null, error: null };
-  }, []);
-
+  
  const fetchData = useCallback(async () => {
   setLoading(true);
   setErrorMsg(null);
