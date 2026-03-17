@@ -321,14 +321,13 @@ function ExerciseItem({
     logs[keyLegacyDisplayCurrent] ||
     null;
 
-  // ✅ lookup robusto (history) con helper unico
-  const lastLog = getHistoryLogForExercise({
-    rawEx,
-    dayName: activeDayName,
-    exIndex,
-    activeWeek,
-    historyLogs,
-  });
+  // ✅ lookup robusto (history)
+  const lastLog =
+    historyLogs[keyStable] ||
+    historyLogs[keyLegacyRaw] ||
+    (keyLegacyDisplayPrev ? historyLogs[keyLegacyDisplayPrev] : null) ||
+    historyLogs[keyLegacyDisplayCurrent] ||
+    null;
 
   // ✅ la key usata per editing/confirm/advance deve essere sempre STABILE
   const key = keyStable || keyLegacyRaw;
@@ -1090,7 +1089,7 @@ export default function LivePage({ params }) {
           : [{ reps: "", weight: "" }]
       );
     },
-    [activeWeek, historyLogs]
+    [historyLogs]
   );
 
   const updateRow = useCallback((i, f, v) => {
@@ -1126,7 +1125,7 @@ export default function LivePage({ params }) {
       const parsed = parseSetData(hist.actual_reps, hist.actual_weight);
       setSetLogsData(parsed.length ? parsed : [{ reps: "", weight: "" }]);
     },
-    [activeWeek, historyLogs]
+    [historyLogs]
   );
 
   const safeUpsertWorkoutLog = async ({ existingId, payload }) => {
