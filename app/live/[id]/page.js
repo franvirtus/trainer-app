@@ -30,40 +30,17 @@ const norm = (s) => String(s ?? "").trim().toLowerCase();
 const makeKey = (exName, dayName, index = 0) =>
   `${norm(exName)}|${norm(dayName)}|${Number(index ?? 0)}`;
 
-const makeUidDayKey = (uid, dayName) => {
+const makeUidKey = (uid) => {
   const t = String(uid ?? "").trim();
-  const d = norm(dayName);
-  return t ? `uid:${t}|day:${d}` : "";
+  return t ? `uid:${t}` : "";
 };
 
 const makeExerciseLookupKey = (rawEx, dayName, index = 0) =>
-  makeUidDayKey(rawEx?.id, dayName) || makeKey(rawEx?.name, dayName, index);
+  makeUidKey(rawEx?.id) || makeKey(rawEx?.name, dayName, index);
 
 const makeLogLookupKey = (log) =>
-  makeUidDayKey(log?.exercise_uid, log?.day_label) ||
-  makeKey(log?.exercise_name_snapshot || log?.exercise_name, log?.day_label, log?.exercise_index);
-
-const getHistoryLogForExercise = ({ rawEx, dayName, exIndex, activeWeek, historyLogs }) => {
-  const keyStable =
-    makeExerciseLookupKey(rawEx, dayName, exIndex) ||
-    makeKey(rawEx?.name, dayName, exIndex);
-
-  const keyLegacyRaw = makeKey(rawEx?.name, dayName, exIndex);
-
-  const currentDisplay = getExerciseDisplay(rawEx, activeWeek);
-  const keyLegacyDisplayCurrent = makeKey(currentDisplay?.name, dayName, exIndex);
-
-  const prevDisplay = activeWeek > 1 ? getExerciseDisplay(rawEx, activeWeek - 1) : null;
-  const keyLegacyDisplayPrev = prevDisplay?.name ? makeKey(prevDisplay.name, dayName, exIndex) : null;
-
-  return (
-    historyLogs?.[keyStable] ||
-    historyLogs?.[keyLegacyRaw] ||
-    (keyLegacyDisplayPrev ? historyLogs?.[keyLegacyDisplayPrev] : null) ||
-    historyLogs?.[keyLegacyDisplayCurrent] ||
-    null
-  );
-};
+  makeUidKey(log?.exercise_uid) ||
+  makeKey(log?.exercise_name, log?.day_label, log?.exercise_index);
 
 const toNullableNumber = (val) => {
   const t = String(val ?? "").trim().replace(",", ".");
@@ -1070,13 +1047,7 @@ export default function LivePage({ params }) {
         makeKey(rawEx?.name, dayName, exIndex);
       setEditingKey(keyStable);
 
-      const hist = getHistoryLogForExercise({
-        rawEx,
-        dayName,
-        exIndex,
-        activeWeek,
-        historyLogs,
-      });
+      const hist = historyLogs[keyStable] || historyLogs[makeKey(rawEx?.name, dayName, exIndex)];
 
       const initialNotes =
         String(existingData?.athlete_notes ?? "").trim() || String(hist?.athlete_notes ?? "").trim() || "";
@@ -1114,13 +1085,7 @@ export default function LivePage({ params }) {
       const keyStable =
         makeExerciseLookupKey(rawEx, dayName, exIndex) ||
         makeKey(rawEx?.name, dayName, exIndex);
-      const hist = getHistoryLogForExercise({
-        rawEx,
-        dayName,
-        exIndex,
-        activeWeek,
-        historyLogs,
-      });
+      const hist = historyLogs[keyStable] || historyLogs[makeKey(rawEx?.name, dayName, exIndex)];
       if (!hist) return;
       const parsed = parseSetData(hist.actual_reps, hist.actual_weight);
       setSetLogsData(parsed.length ? parsed : [{ reps: "", weight: "" }]);
@@ -1447,7 +1412,7 @@ export default function LivePage({ params }) {
           <div className="w-full max-w-md rounded-3xl border border-slate-700 bg-slate-900 overflow-hidden shadow-2xl">
             <div className="px-5 py-4 border-b border-slate-700 flex items-center justify-between bg-slate-950">
               <div className="text-sm font-black flex items-center gap-2 text-blue-200">
-                <History size={16} /> LAST {lastModalLog?.week_number ? `(W${lastModalLog.week_number})` : ""}
+                <History size={16} /> LAST (W{activeWeek - 1})
               </div>
               <button
                 onClick={closeLastModal}
@@ -1460,7 +1425,7 @@ export default function LivePage({ params }) {
 
             <div className="p-5">
               {!lastModalLog ? (
-                <div className="text-slate-300 text-sm">Nessun dato precedente disponibile.</div>
+                <div className="text-slate-300 text-sm">Nessun dato nella settimana precedente.</div>
               ) : (
                 <>
 
