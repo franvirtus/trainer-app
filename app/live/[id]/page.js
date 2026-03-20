@@ -38,9 +38,54 @@ const makeUidKey = (uid) => {
 const makeExerciseLookupKey = (rawEx, dayName, index = 0) =>
   makeUidKey(rawEx?.id) || makeKey(rawEx?.name, dayName, index);
 
+const hasValidIndex = (index) => {
+  const n = Number(index);
+  return Number.isInteger(n) && n >= 0;
+};
+
+const makeNameDayKey = (exName, dayName) => `${norm(exName)}|${norm(dayName)}`;
+
 const makeLogLookupKey = (log) =>
   makeUidKey(log?.exercise_uid) ||
-  makeKey(log?.exercise_name, log?.day_label, log?.exercise_index);
+  (hasValidIndex(log?.exercise_index)
+    ? makeKey(log?.exercise_name, log?.day_label, log?.exercise_index)
+    : "");
+
+const normalizeLogRecord = (log) => ({
+  ...log,
+  athlete_notes: log?.athlete_notes ?? "",
+  athlete_metrics: log?.athlete_metrics ?? {},
+  rpe: log?.rpe ?? null,
+});
+
+const buildLogLookupKeys = (log) => {
+  const keys = [];
+  const primary = makeLogLookupKey(log);
+  if (primary) keys.push(primary);
+
+  if (hasValidIndex(log?.exercise_index)) {
+    const snapshotOrName = log?.exercise_name_snapshot || log?.exercise_name;
+    const stableName = log?.exercise_name;
+
+    if (snapshotOrName) keys.push(makeKey(snapshotOrName, log?.day_label, log?.exercise_index));
+    if (stableName) keys.push(makeKey(stableName, log?.day_label, log?.exercise_index));
+  }
+
+  const snapshotOrName = log?.exercise_name_snapshot || log?.exercise_name;
+  const stableName = log?.exercise_name;
+
+  if (snapshotOrName) keys.push(makeNameDayKey(snapshotOrName, log?.day_label));
+  if (stableName) keys.push(makeNameDayKey(stableName, log?.day_label));
+
+  return Array.from(new Set(keys.filter(Boolean)));
+};
+
+const mergeLogIntoMap = (target, log, chooser) => {
+  const normalizedLog = normalizeLogRecord(log);
+  buildLogLookupKeys(log).forEach((k) => {
+    target[k] = chooser(target[k], normalizedLog);
+  });
+};
 
 const toNullableNumber = (val) => {
   const t = String(val ?? "").trim().replace(",", ".");
@@ -920,17 +965,7 @@ export default function LivePage({ params }) {
       (allLogs || []).forEach((log) => {
         const w = Number(log.week_number) || 1;
         if (!byWeek[w]) byWeek[w] = {};
-
-        const exIdx = Number(log.exercise_index);
-        if (!Number.isInteger(exIdx) || exIdx < 0) return;
-
-        const k = makeLogLookupKey(log);
-        byWeek[w][k] = {
-          ...log,
-          athlete_notes: log.athlete_notes ?? "",
-          athlete_metrics: log.athlete_metrics ?? {},
-          rpe: log.rpe ?? null,
-        };
+        mergeLogIntoMap(byWeek[w], log, preferLog);
       });
 
       const dur = Number(safeProg.duration) || 4;
@@ -957,17 +992,7 @@ export default function LivePage({ params }) {
 
     const logsMap = {};
     (savedLogs || []).forEach((log) => {
-      const exIdx = Number(log.exercise_index);
-      if (!Number.isInteger(exIdx) || exIdx < 0) return;
-
-      const k = makeLogLookupKey(log);
-      const normalizedLog = {
-        ...log,
-        athlete_notes: log.athlete_notes ?? "",
-        athlete_metrics: log.athlete_metrics ?? {},
-        rpe: log.rpe ?? null,
-      };
-      logsMap[k] = preferLog(logsMap[k], normalizedLog);
+      mergeLogIntoMap(logsMap, log, preferLog);
     });
     setLogs(logsMap);
 
@@ -982,27 +1007,7 @@ export default function LivePage({ params }) {
   (allPreviousLogs || [])
     .filter((log) => Number(log.week_number || 0) < Number(activeWeek || 0))
     .forEach((log) => {
-      const exIdx = Number(log.exercise_index);
-      if (!Number.isInteger(exIdx) || exIdx < 0) return;
-
-      const normalizedLog = {
-        ...log,
-        athlete_notes: log.athlete_notes ?? "",
-        athlete_metrics: log.athlete_metrics ?? {},
-        rpe: log.rpe ?? null,
-      };
-
-      const keys = [
-        makeLogLookupKey(log),
-        makeKey(log?.exercise_name_snapshot || log?.exercise_name, log?.day_label, log?.exercise_index),
-        makeKey(log?.exercise_name, log?.day_label, log?.exercise_index),
-        `${norm(log?.exercise_name_snapshot || log?.exercise_name)}|${norm(log?.day_label)}`,
-        `${norm(log?.exercise_name)}|${norm(log?.day_label)}`,
-      ].filter(Boolean);
-
-      keys.forEach((k) => {
-        historyMap[k] = preferLog(historyMap[k], normalizedLog);
-      });
+      mergeLogIntoMap(historyMap, log, preferLog);
     });
 
   setHistoryLogs(historyMap);
@@ -1172,15 +1177,11 @@ export default function LivePage({ params }) {
       if (res.error) return alert("Errore salvataggio: " + res.error.message);
 
       const data = res.data;
-      setLogs((prev) => ({
-        ...prev,
-        [key]: {
-          ...data,
-          athlete_notes: data.athlete_notes ?? "",
-          athlete_metrics: data.athlete_metrics ?? {},
-          rpe: data.rpe ?? null,
-        },
-      }));
+      setLogs((prev) => {
+        const next = { ...prev };
+        mergeLogIntoMap(next, data, preferLog);
+        return next;
+      });
 
       closeEdit();
     },
@@ -1211,7 +1212,9 @@ export default function LivePage({ params }) {
 
           setLogs((prev) => {
             const copy = { ...prev };
-            delete copy[key];
+            buildLogLookupKeys(current || {}).forEach((k) => {
+              delete copy[k];
+            });
             return copy;
           });
         } else {
@@ -1224,7 +1227,11 @@ export default function LivePage({ params }) {
             alert("Errore rimozione conferma: " + error.message);
             return false;
           }
-          setLogs((prev) => ({ ...prev, [key]: { ...current, completed: false } }));
+          setLogs((prev) => {
+            const next = { ...prev };
+            mergeLogIntoMap(next, { ...current, completed: false }, preferLog);
+            return next;
+          });
         }
 
         setConfirmFlash(true);
@@ -1242,7 +1249,11 @@ export default function LivePage({ params }) {
           alert("Errore conferma: " + error.message);
           return false;
         }
-        setLogs((prev) => ({ ...prev, [key]: { ...current, completed: true } }));
+        setLogs((prev) => {
+          const next = { ...prev };
+          mergeLogIntoMap(next, { ...current, completed: true }, preferLog);
+          return next;
+        });
       } else {
         const basePayload = {
           program_id: id,
